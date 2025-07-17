@@ -13,7 +13,7 @@ try:
     log.append("[N] Load Old Settings")
     with open(root + "Asset/text/setting.json", "r") as io:
         old_setting = json.load(io)
-    log.append("[I] MMS-NEXT Updater V250716A | MMS-NEXT V" + str(old_setting["version"]))
+    log.append("[I] MMS-NEXT V" + str(old_setting["version"]))
     log.append("[N] Position: " + root)
 
     if os.path.exists(root + "Cache/extracted"):
@@ -76,8 +76,8 @@ except:
     log.extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 finally:
     if log:
-        with open("error_log.txt", "a") as io:
-            io.write("[V250716A] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
+        with open("log.txt", "a") as io:
+            io.write("[V250718B] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
             io.writelines("  " + line + "\n" for line in log)
 
     subprocess.Popen(root + "MIDI-MCSTRUCTURE_NEXT.exe")
