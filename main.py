@@ -37,6 +37,7 @@ def asset_load():
         global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/menu_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["blur"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/blur_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["config"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/config_background.png"), (760, 40)).convert_alpha()
+        global_asset["logo"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/logo.png"), (560, 64)).convert_alpha()
 
         global_asset["structure"] = []
         for _n in os.listdir("Asset/mcstructure"):
@@ -60,7 +61,7 @@ def asset_load():
 
         add_page(overlay_page, [menu_screen, {"config": [["转换文件", 0, start_convert], ["设置", 0, ask_software_setting], ["关于MIDI-MCSTRUCTURE", 0, show_about]]}], 0, False)
     except:
-        global_info["log"].extend(traceback.format_exc().splitlines())
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
 def render_page(_root, _overlay, _event):
 
@@ -70,11 +71,11 @@ def render_page(_root, _overlay, _event):
         if _n + 1 == _pages_num or _overlay[_n + 1][2] != 1:
             _root.blit(to_alpha(_overlay[_n][0](_overlay[_n][1], _event if _overlay[_n][3] else {}), (255, 255, 255, 255 * _overlay[_n][2])), (0, 0))
         if _overlay[_n][3]:
-            _overlay[_n][2] += (1.01 - _overlay[_n][2]) * global_info["anime_speed"]
+            _overlay[_n][2] += (1.01 - _overlay[_n][2]) * global_info["animation_speed"]
             if _overlay[_n][2] >= 1:
                 _overlay[_n][2] = 1
         else:
-            _overlay[_n][2] += (-0.01 - _overlay[_n][2]) * global_info["anime_speed"]
+            _overlay[_n][2] += (-0.01 - _overlay[_n][2]) * global_info["animation_speed"]
             if _overlay[_n][2] <= 0:
                 _overlay[_n][2] = 0
 
@@ -126,11 +127,11 @@ def convertor_screen(_info, _input):
                     _text = "请完成常用设置"
                 elif global_info["convertor"]["speed"] == -1:
                     _text = "请完成其他设置"
-            _i[1] += (255 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
             if "mouse_left" in _input and not _input["mouse_left"]:
                 _i[2]()
         else:
-            _i[1] += (127 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         if _n == 0:
@@ -191,7 +192,7 @@ def loading_screen(_info, _input):
     for _n in _info["point"]:
         _root.blit(global_asset["point"], (_n, 350))
     if int(round_45(_info["point"][_info["index"]])) < _info["target"]:
-        _info["point"][_info["index"]] += (_info["target"] - _info["point"][_info["index"]]) * global_info["anime_speed"]
+        _info["point"][_info["index"]] += (_info["target"] - _info["point"][_info["index"]]) * global_info["animation_speed"]
     else:
         _info["index"] += 1
         if _info["index"] == 3:
@@ -213,11 +214,11 @@ def menu_screen(_info, _input):
     for _n, _i in enumerate(_info["config"]):
         _y = 20 + _n * 60
         if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
             if "mouse_left" in _input and not _input["mouse_left"]:
                 _i[2]()
         else:
-            _i[1] += (127 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text_surface = to_alpha(global_asset["font"].render(_i[0] + ("（发现新版本）" if global_info["new_version"] and _n == 1 else ""), True, (255, 255, 255)), (255, 255, 255, _i[1]))
@@ -228,7 +229,7 @@ def menu_screen(_info, _input):
     return _root
 
 def ask_software_setting():
-    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["重置结构ID", 0], ["界面刷新率 ", 0], ["日志等级 ", 0]]}])
+    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["重置结构ID", 0], ["界面刷新率 ", 0], ["动画速度 ", 0], ["日志等级 ", 0]]}])
 
 def software_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
@@ -245,7 +246,7 @@ def software_setting_screen(_info, _input):
         _text = _i[0]
         _y = 20 + _n * 60
         if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
             if _n == 1:
                 if not global_info["setting"]["id"]:
                     _text = "已重置结构ID"
@@ -255,25 +256,26 @@ def software_setting_screen(_info, _input):
                 elif _n == 1:
                     global_info["setting"]["id"] = 0
                 elif _n == 2:
-                    if global_info["setting"]["fps"] == 30:
-                        global_info["setting"]["fps"] = 60
-                    elif global_info["setting"]["fps"] == 60:
-                        global_info["setting"]["fps"] = 120
-                    elif global_info["setting"]["fps"] == 120:
-                        global_info["setting"]["fps"] = 165
-                    else:
-                        global_info["setting"]["fps"] = 30
+                    global_info["setting"]["fps"] += 30
+                    if global_info["setting"]["fps"] > 120:
+                        global_info["setting"]["fps"] = 0
                 elif _n == 3:
+                    global_info["setting"]["animation_speed"] += 1
+                    if global_info["setting"]["animation_speed"] >= 16:
+                        global_info["setting"]["animation_speed"] = 0
+                elif _n == 4:
                     global_info["setting"]["log_level"] += 1
                     if global_info["setting"]["log_level"] == 2:
                         global_info["setting"]["log_level"] = 0
         else:
-            _i[1] += (127 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         if _n == 0:
             _text += "（发现新版本）" if global_info["new_version"] else ""
         elif _n == 2:
             _text += str(global_info["setting"]["fps"]) + "Hz"
         elif _n == 3:
+            _text += str(global_info["setting"]["animation_speed"]) if global_info["setting"]["animation_speed"] else "关"
+        elif _n == 4:
             if global_info["setting"]["log_level"] == 0:
                 _text += "Disable"
             elif global_info["setting"]["log_level"] == 1:
@@ -305,7 +307,7 @@ def get_version_list():
 
         global_info["new_version"] = global_info["update_list"][0]["version"] > global_info["setting"]["version"]
     except:
-        global_info["log"].extend(traceback.format_exc().splitlines())
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
 def download(_url, _state, _target_hash="", _file_name="package.7z"):
     try:
@@ -332,7 +334,7 @@ def download(_url, _state, _target_hash="", _file_name="package.7z"):
             raise IOError("Broken Package, Please Try Again.")
     except:
         _state["state"] = -1
-        global_info["log"].extend(traceback.format_exc().splitlines())
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
     finally:
         if _state["state"] != -1:
             _state["state"] = 1
@@ -356,7 +358,7 @@ def version_list_screen(_info, _input):
         if _n > 2:
             _y += 60
         if _y <= mouse_position[1] <= _y + 40 and (((80 <= mouse_position[0] <= 720 and _n == 0) or (20 <= mouse_position[0] <= 780 and _n > 2)) or ((20 <= mouse_position[0] <= 80 and _n == 1) or (720 <= mouse_position[0] <= 780 and _n == 2))):
-            _i[1] += (255 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
             if "mouse_left" in _input and not _input["mouse_left"]:
                 if _n == 1:
                     _info["index"] -= 1
@@ -371,11 +373,12 @@ def version_list_screen(_info, _input):
                 elif _n == 4:
                     show_download(global_info["update_list"][_info["index"]])
         else:
-            _i[1] += (127 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         if _n == 0:
             _i[1] = 255
             _i[0] = "V" + str(global_info["update_list"][_info["index"]]["version"]) + ("-" + str(global_info["update_list"][_info["index"]]["edition"]) if global_info["update_list"][_info["index"]]["edition"] else "")
-        _root.blit(global_asset["config"], (20, _y))
+        if _n >= 2:
+            _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text_surface = to_alpha(global_asset["font"].render(_i[0], True, (255, 255, 255)), (255, 255, 255, _i[1]))
         _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))
@@ -413,6 +416,8 @@ def download_screen(_info, _input):
                 global_info["exit"] = 2
             elif _info["state"]["state"] == -1:
                 _text = "下载失败，请重试"
+            else:
+                _text = ""
         _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text_surface = global_asset["font"].render(_text, True, (255, 255, 255))
@@ -430,7 +435,7 @@ def show_about():
         _edition = "Unknown"
     if global_info["setting"]["edition"]:
         _edition += "-" + str(global_info["setting"]["edition"])
-    add_page(overlay_page, [about_screen, {"text": [["MIDI-MCSTRUCTURE NEXT", 0, 0], [_edition, 0, 0], ["MMS-NEXT 开源仓库", 0, 20], ["MMS 开源仓库", 0, 20]]}])
+    add_page(overlay_page, [about_screen, {"text": [["", 0, 0], ["", 0, 0], [_edition, 0, 0], ["交流群(密码14890357)", 0, 20], ["MMS-NEXT 开源仓库", 0, 20], ["MMS 开源仓库", 0, 20]]}])
 
 def about_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
@@ -447,14 +452,16 @@ def about_screen(_info, _input):
         _y += _i[2]
         if _i[2]:
             if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-                _i[1] += (255 - _i[1]) * global_info["anime_speed"]
+                _i[1] += (255 - _i[1]) * global_info["animation_speed"]
                 if "mouse_left" in _input and not _input["mouse_left"]:
-                    if _n == 2:
+                    if _n == 3:
+                        webbrowser.open("qm.qq.com/q/9oBhTyDN8k")
+                    elif _n == 4:
                         webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure_next")
-                    elif _n == 3:
+                    elif _n == 5:
                         webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure")
             else:
-                _i[1] += (127 - _i[1]) * global_info["anime_speed"]
+                _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         else:
             _i[1] = 255
         _root.blit(global_asset["config"], (20, _y))
@@ -462,6 +469,8 @@ def about_screen(_info, _input):
         _text_surface = to_alpha(global_asset["font"].render(_i[0], True, (255, 255, 255)), (255, 255, 255, _i[1]))
         _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))
         _y += 40
+
+    _root.blit(global_asset["logo"], (120, 28))
 
     _root.blit(_mask, (0, 0))
 
@@ -489,7 +498,7 @@ def setting_screen(_info, _input):
     for _n, _i in enumerate(_info["config"]):
         _y = 20 + _n * 60
         if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
             if "mouse_left" in _input and not _input["mouse_left"]:
                 if _n == 0:
                     if global_info["convertor"]["output_format"] == 0 or global_info["convertor"]["edition"] == 1:
@@ -514,7 +523,7 @@ def setting_screen(_info, _input):
                     if global_info["convertor"]["structure"] >= len(global_asset["structure"]):
                         global_info["convertor"]["structure"] = 0
         else:
-            _i[1] += (127 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text = _i[0]
@@ -565,7 +574,7 @@ def other_setting_screen(_info, _input):
     for _n, _i in enumerate(_info["config"]):
         _y = 20 + _n * 60
         if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
             if "mouse_left" in _input and not _input["mouse_left"]:
                 if _n == 0:
                     global_info["convertor"]["speed"] += 5
@@ -592,7 +601,7 @@ def other_setting_screen(_info, _input):
                     else:
                         global_info["convertor"]["adjustment"] = True
         else:
-            _i[1] += (127 - _i[1]) * global_info["anime_speed"]
+            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text = _i[0]
@@ -646,7 +655,7 @@ def game_edition_screen(_info, _input):
     for _n, _i in enumerate(_info["config"]):
         _y = 20 + _n * 60
         if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[0] += (255 - _i[0]) * global_info["anime_speed"]
+            _i[0] += (255 - _i[0]) * global_info["animation_speed"]
             if "mouse_left" in _input and not _input["mouse_left"]:
                 if _n == 0:
                     if global_info["convertor"]["edition"] == 0:
@@ -662,7 +671,7 @@ def game_edition_screen(_info, _input):
                     else:
                         global_info["convertor"]["version"] = 0
         else:
-            _i[0] += (127 - _i[0]) * global_info["anime_speed"]
+            _i[0] += (127 - _i[0]) * global_info["animation_speed"]
         _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text = ""
@@ -913,6 +922,9 @@ def convertor(_setting, _task_id):
 
             subprocess.Popen("Writer/writer.exe").wait()
 
+            if not os.path.exists("Cache/convertor/structure.mcstructure"):
+                return
+
             if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT", initialfile=_music_name, filetypes=[("Structure Files", ".mcstructure")], defaultextension=".mcstructure"):
                 if os.path.exists(_save_path):
                     os.remove(_save_path)
@@ -991,12 +1003,12 @@ def convertor(_setting, _task_id):
                             shutil.copytree("Cache/convertor/function_pack", _save_path + ("-" + str(_n) if _n else ""))
                             break
     except:
-        global_info["log"].extend(traceback.format_exc().splitlines())
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
     finally:
         remove_page(overlay_page)
 
 def processing_screen(_info, _input):
-    return pygame.Surface(global_info["display_size"]).convert_alpha()
+    return global_asset["blur"].copy()
 
 def round_45(_i, _n=0):
     _i = int(_i * 10 ** int(_n + 1))
@@ -1005,7 +1017,7 @@ def round_45(_i, _n=0):
     _i = int(_i / 10)
     return _i / (10 ** int(_n))
 
-global_info = {"exit": 0, "log": [], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": ""}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False}}
+global_info = {"exit": 0, "log": [], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False}}
 overlay_page = []
 global_asset = {}
 
@@ -1038,20 +1050,20 @@ try:
                     env_list["mouse_right"] = False
         if global_info["exit"]:
             break
-        global_info["anime_speed"] = timer.get_fps()
-        if global_info["anime_speed"] > 10:
-            global_info["anime_speed"] = 10 / global_info["anime_speed"]
+        global_info["animation_speed"] = timer.get_fps()
+        if 0 < global_info["setting"]["animation_speed"] < global_info["animation_speed"]:
+            global_info["animation_speed"] = global_info["setting"]["animation_speed"] / global_info["animation_speed"]
         else:
-            global_info["anime_speed"] = 1
+            global_info["animation_speed"] = 1
         if overlay_page:
             render_page(window, overlay_page, env_list)
         pygame.display.flip()
         timer.tick(global_info["setting"]["fps"])
 except:
-    global_info["log"].extend(traceback.format_exc().splitlines())
+    global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 finally:
     if global_info["log"] and global_info["setting"]["log_level"]:
-        with open("error_log.txt", "a") as io:
+        with open("log.txt", "a") as io:
             io.write("[V" + (str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
             io.writelines("  " + line + "\n" for line in global_info["log"])
 
