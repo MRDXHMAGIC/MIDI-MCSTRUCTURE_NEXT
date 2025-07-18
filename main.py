@@ -17,8 +17,7 @@ from tkinter import filedialog
 def asset_load():
     try:
         global_asset["loading"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading.png"), global_info["display_size"]).convert_alpha()
-        global_asset["point"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/point.png"), (8, 8)).convert_alpha()
-        add_page(overlay_page, [loading_screen, {"point": [-8, -8, -8], "index": 0, "target": 396}], 1)
+        add_page(overlay_page, [loading_screen, {}], 1)
 
         if os.path.isdir("Cache/extracted/Updater"):
             _n = 0
@@ -34,6 +33,7 @@ def asset_load():
 
         pygame.font.init()
         global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", 28)
+        global_asset["error"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/error_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/menu_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["blur"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/blur_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["config"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/config_background.png"), (760, 40)).convert_alpha()
@@ -53,7 +53,8 @@ def asset_load():
         with open("Asset/text/setting.json", "rb") as _io:
             _buffer = json.loads(_io.read())
             for _k in _buffer:
-                global_info["setting"][_k] = _buffer[_k]
+                if _k not in ("behavior", "last_time"):
+                    global_info["setting"][_k] = _buffer[_k]
 
         threading.Thread(target=get_version_list).start()
 
@@ -61,6 +62,7 @@ def asset_load():
 
         add_page(overlay_page, [menu_screen, {"config": [["转换文件", 0, start_convert], ["设置", 0, ask_software_setting], ["关于MIDI-MCSTRUCTURE", 0, show_about]]}], 0, False)
     except:
+        global_info["exit"] = 3
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
 def render_page(_root, _overlay, _event):
@@ -188,21 +190,7 @@ def convertor_screen(_info, _input):
     return _root
 
 def loading_screen(_info, _input):
-    _root = global_asset["loading"].copy()
-    for _n in _info["point"]:
-        _root.blit(global_asset["point"], (_n, 350))
-    if int(round_45(_info["point"][_info["index"]])) < _info["target"]:
-        _info["point"][_info["index"]] += (_info["target"] - _info["point"][_info["index"]]) * global_info["animation_speed"]
-    else:
-        _info["index"] += 1
-        if _info["index"] == 3:
-            if _info["target"] == 396:
-                _info["target"] = 808
-            else:
-                _info["point"] = [-8, -8, -8]
-                _info["target"] = 396
-            _info["index"] = 0
-    return _root
+    return global_asset["loading"].copy()
 
 def menu_screen(_info, _input):
     _root = pygame.Surface(global_info["display_size"]).convert_alpha()
@@ -272,7 +260,7 @@ def software_setting_screen(_info, _input):
         if _n == 0:
             _text += "（发现新版本）" if global_info["new_version"] else ""
         elif _n == 2:
-            _text += str(global_info["setting"]["fps"]) + "Hz"
+            _text += str(global_info["setting"]["fps"]) + "Hz" if global_info["setting"]["fps"] else "无限制"
         elif _n == 3:
             _text += str(global_info["setting"]["animation_speed"]) if global_info["setting"]["animation_speed"] else "关"
         elif _n == 4:
@@ -346,44 +334,49 @@ def version_list_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
-    _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
+    if global_info["update_list"]:
+        _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+        _mask = global_asset["menu"].copy()
+        _root.blit(global_asset["blur"], (0, 0))
 
-    mouse_position = pygame.mouse.get_pos()
+        mouse_position = pygame.mouse.get_pos()
 
-    _y = 20
+        _y = 20
 
-    for _n, _i in enumerate(_info["config"]):
-        if _n > 2:
-            _y += 60
-        if _y <= mouse_position[1] <= _y + 40 and (((80 <= mouse_position[0] <= 720 and _n == 0) or (20 <= mouse_position[0] <= 780 and _n > 2)) or ((20 <= mouse_position[0] <= 80 and _n == 1) or (720 <= mouse_position[0] <= 780 and _n == 2))):
-            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                if _n == 1:
-                    _info["index"] -= 1
-                    if _info["index"] < 0:
-                        _info["index"] = len(global_info["update_list"]) - 1
-                elif _n == 2:
-                    _info["index"] += 1
-                    if _info["index"] >= len(global_info["update_list"]):
-                        _info["index"] = 0
-                elif _n == 3 and global_info["update_list"][_info["index"]]["description_url"]:
-                    webbrowser.open(global_info["update_list"][_info["index"]]["description_url"])
-                elif _n == 4:
-                    show_download(global_info["update_list"][_info["index"]])
-        else:
-            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        if _n == 0:
-            _i[1] = 255
-            _i[0] = "V" + str(global_info["update_list"][_info["index"]]["version"]) + ("-" + str(global_info["update_list"][_info["index"]]["edition"]) if global_info["update_list"][_info["index"]]["edition"] else "")
-        if _n >= 2:
-            _root.blit(global_asset["config"], (20, _y))
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = to_alpha(global_asset["font"].render(_i[0], True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))
+        for _n, _i in enumerate(_info["config"]):
+            if _n > 2:
+                _y += 60
+            if _y <= mouse_position[1] <= _y + 40 and (((80 <= mouse_position[0] <= 720 and _n == 0) or (20 <= mouse_position[0] <= 780 and _n > 2)) or ((20 <= mouse_position[0] <= 80 and _n == 1) or (720 <= mouse_position[0] <= 780 and _n == 2))):
+                _i[1] += (255 - _i[1]) * global_info["animation_speed"]
+                if "mouse_left" in _input and not _input["mouse_left"]:
+                    if _n == 1:
+                        _info["index"] -= 1
+                        if _info["index"] < 0:
+                            _info["index"] = len(global_info["update_list"]) - 1
+                    elif _n == 2:
+                        _info["index"] += 1
+                        if _info["index"] >= len(global_info["update_list"]):
+                            _info["index"] = 0
+                    elif _n == 3 and global_info["update_list"][_info["index"]]["description_url"]:
+                        webbrowser.open(global_info["update_list"][_info["index"]]["description_url"])
+                    elif _n == 4:
+                        show_download(global_info["update_list"][_info["index"]])
+            else:
+                _i[1] += (127 - _i[1]) * global_info["animation_speed"]
+            if _n == 0:
+                _i[1] = 255
+                _i[0] = "V" + str(global_info["update_list"][_info["index"]]["version"]) + ("-" + str(global_info["update_list"][_info["index"]]["edition"]) if global_info["update_list"][_info["index"]]["edition"] else "")
+            if _n >= 2:
+                _root.blit(global_asset["config"], (20, _y))
+            _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
+            _text_surface = to_alpha(global_asset["font"].render(_i[0], True, (255, 255, 255)), (255, 255, 255, _i[1]))
+            _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))
 
-    _root.blit(_mask, (0, 0))
+        _root.blit(_mask, (0, 0))
+    else:
+        _root = global_asset["blur"].copy()
+        _text_surface = global_asset["font"].render("无法获取版本信息", True, (255, 255, 255))
+        _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, (global_info["display_size"][1] - _text_surface.get_size()[1]) / 2))
 
     return _root
 
@@ -1017,17 +1010,24 @@ def round_45(_i, _n=0):
     _i = int(_i / 10)
     return _i / (10 ** int(_n))
 
-global_info = {"exit": 0, "log": [], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False}}
+global_info = {"exit": 0, "log": [], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "last_time": int(time.time())}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False}}
 overlay_page = []
 global_asset = {}
 
-try:
-    pygame.display.init()
-    global_info["display_size"] = (800, 450)
-    pygame.display.set_icon(pygame.image.load("Asset/image/icon.ico"))
-    window = pygame.display.set_mode(global_info["display_size"])
-    pygame.display.set_caption("MIDI-MCSTRUCTURE NEXT  GUI")
+pygame.display.init()
 
+global_info["display_size"] = (800, 450)
+
+pygame.display.set_caption("MIDI-MCSTRUCTURE NEXT  GUI")
+
+try:
+    pygame.display.set_icon(pygame.image.load("Asset/image/icon.ico"))
+except:
+    global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+
+window = pygame.display.set_mode(global_info["display_size"])
+
+try:
     timer = pygame.time.Clock()
 
     threading.Thread(target=asset_load).start()
@@ -1060,17 +1060,34 @@ try:
         pygame.display.flip()
         timer.tick(global_info["setting"]["fps"])
 except:
+    global_info["exit"] = 3
     global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 finally:
-    if global_info["log"] and global_info["setting"]["log_level"]:
-        with open("log.txt", "a") as io:
-            io.write("[V" + (str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
-            io.writelines("  " + line + "\n" for line in global_info["log"])
+    try:
+        if global_info["log"] and global_info["setting"]["log_level"]:
+            with open("log.txt", "a") as io:
+                io.write("[V" + (str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
+                io.writelines("  " + line + "\n" for line in global_info["log"])
 
-    with open("Asset/text/setting.json", "w") as io:
-        io.write(json.dumps(global_info["setting"], indent=2))
+        if global_info["exit"] == 2:
+            global_info["setting"]["behavior"] = "update"
+        if global_info["exit"] == 3:
+            global_info["setting"]["behavior"] = "reboot"
+        else:
+            del global_info["setting"]["last_time"]
 
-    if global_info["exit"] == 2:
-        subprocess.Popen("Updater/updater.exe")
+        if not os.path.exists("Asset/text"):
+            os.makedirs("Asset/text")
 
-    os._exit(0)
+        with open("Asset/text/setting.json", "w") as io:
+            io.write(json.dumps(global_info["setting"], indent=2))
+
+        if global_info["exit"] == 3:
+            window.blit(pygame.transform.scale(global_asset["error"], (800, 450)), (0, 0))
+            pygame.display.flip()
+            time.sleep(3)
+    finally:
+        if global_info["exit"] >= 2:
+            subprocess.Popen("Updater/updater.exe")
+
+        os._exit(0)
