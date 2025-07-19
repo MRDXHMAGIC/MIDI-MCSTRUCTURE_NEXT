@@ -19,6 +19,8 @@ def asset_load():
         global_asset["loading"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading.png"), global_info["display_size"]).convert_alpha()
         add_page(overlay_page, [loading_screen, {}], 1)
 
+        global_asset["error"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/error_background.png"), global_info["display_size"]).convert_alpha()
+
         if os.path.isdir("Cache/extracted/Updater"):
             _n = 0
             while _n <= 16:
@@ -33,7 +35,6 @@ def asset_load():
 
         pygame.font.init()
         global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", 28)
-        global_asset["error"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/error_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/menu_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["blur"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/blur_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["config"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/config_background.png"), (760, 40)).convert_alpha()
@@ -53,14 +54,13 @@ def asset_load():
         with open("Asset/text/setting.json", "rb") as _io:
             _buffer = json.loads(_io.read())
             for _k in _buffer:
-                if _k not in ("behavior", "last_time"):
-                    global_info["setting"][_k] = _buffer[_k]
+                global_info["setting"][_k] = _buffer[_k]
 
         threading.Thread(target=get_version_list).start()
 
         time.sleep(1)
 
-        add_page(overlay_page, [menu_screen, {"config": [["转换文件", 0, start_convert], ["设置", 0, ask_software_setting], ["关于MIDI-MCSTRUCTURE", 0, show_about]]}], 0, False)
+        add_page(overlay_page, [menu_screen, {"config": [["转换文件", 0, start_to_game], ["设置", 0, ask_software_setting], ["关于MIDI-MCSTRUCTURE", 0, show_about]]}], 0, False)
     except:
         global_info["exit"] = 3
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
@@ -103,7 +103,7 @@ def remove_page(_overlay):
             _overlay[_n][3] = False
             break
 
-def start_convert():
+def start_to_game():
     add_page(overlay_page, [convertor_screen, {"config": [["选择文件", 0, ask_file], ["游戏版本", 0, ask_edition], ["常用设置", 0, ask_setting], ["其他设置", 0, ask_other_setting], ["开始", 0, start_task]]}])
 
 def convertor_screen(_info, _input):
@@ -931,6 +931,9 @@ def convertor(_setting, _task_id):
                 else:
                     return
 
+                if _raw_cmd[0] == "/":
+                    _raw_cmd = _raw_cmd[1:]
+
                 for _k in sorted(list(_note_buffer)):
                     for _n, _i in enumerate(_note_buffer[_k]):
                         _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
@@ -949,6 +952,8 @@ def convertor(_setting, _task_id):
                     _raw_cmd = []
 
                 for _cmd in _raw_cmd:
+                    if _cmd[0] == "/":
+                        _cmd = _cmd[1:]
                     _io.write(_cmd.replace("{TIME}", str(max(list(_note_buffer)))).replace("{ADDRESS}", str(_task_id)) + "\n")
 
             if _setting["edition"] == 0:
@@ -1010,7 +1015,7 @@ def round_45(_i, _n=0):
     _i = int(_i / 10)
     return _i / (10 ** int(_n))
 
-global_info = {"exit": 0, "log": [], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "last_time": int(time.time())}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False}}
+global_info = {"exit": 0, "log": [], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False}}
 overlay_page = []
 global_asset = {}
 
@@ -1063,31 +1068,23 @@ except:
     global_info["exit"] = 3
     global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 finally:
-    try:
-        if global_info["log"] and global_info["setting"]["log_level"]:
-            with open("log.txt", "a") as io:
-                io.write("[V" + (str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
-                io.writelines("  " + line + "\n" for line in global_info["log"])
+    if global_info["log"] and global_info["setting"]["log_level"]:
+        with open("log.txt", "a") as io:
+            io.write("[V" + (str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
+            io.writelines("  " + line + "\n" for line in global_info["log"])
 
-        if global_info["exit"] == 2:
-            global_info["setting"]["behavior"] = "update"
-        if global_info["exit"] == 3:
-            global_info["setting"]["behavior"] = "reboot"
-        else:
-            del global_info["setting"]["last_time"]
+    if not os.path.exists("Asset/text"):
+        os.makedirs("Asset/text")
 
-        if not os.path.exists("Asset/text"):
-            os.makedirs("Asset/text")
+    with open("Asset/text/setting.json", "w") as io:
+        io.write(json.dumps(global_info["setting"], indent=2))
 
-        with open("Asset/text/setting.json", "w") as io:
-            io.write(json.dumps(global_info["setting"], indent=2))
+    if global_info["exit"] == 3:
+        window.blit(pygame.transform.scale(global_asset["error"], (800, 450)), (0, 0))
+        pygame.display.flip()
+        time.sleep(3)
 
-        if global_info["exit"] == 3:
-            window.blit(pygame.transform.scale(global_asset["error"], (800, 450)), (0, 0))
-            pygame.display.flip()
-            time.sleep(3)
-    finally:
-        if global_info["exit"] >= 2:
-            subprocess.Popen("Updater/updater.exe")
+    if global_info["exit"] == 2:
+        subprocess.Popen("Updater/updater.exe")
 
-        os._exit(0)
+    os._exit(0)
