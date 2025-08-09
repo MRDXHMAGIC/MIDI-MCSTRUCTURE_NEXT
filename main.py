@@ -14,6 +14,7 @@ import subprocess
 import webbrowser
 from tkinter import filedialog
 
+# 加载资源函数
 def asset_load():
     try:
         global_asset["loading"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading.png"), global_info["display_size"]).convert_alpha()
@@ -65,6 +66,384 @@ def asset_load():
         global_info["exit"] = 3
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
+# MIDI转换函数
+def convertor(_setting, _task_id):
+    # 添加正在处理页面
+    add_page(overlay_page, [processing_screen, {}])
+
+    try:
+        # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
+        _midi_file = mido.MidiFile(_setting["file"], clip=True)
+
+        # 根据设置的游戏版本选择合适的配置文件
+        if global_info["convertor"]["edition"] == 0:
+            if global_info["convertor"]["version"] == 0:
+                _profile = global_asset["profile"]["old_bedrock"]
+            elif global_info["convertor"]["version"] == 1:
+                _profile = global_asset["profile"]["new_bedrock"]
+        elif global_info["convertor"]["edition"] == 1:
+            if global_info["convertor"]["version"] == 0:
+                _profile = global_asset["profile"]["old_java"]
+            elif global_info["convertor"]["version"] == 1:
+                _profile = global_asset["profile"]["new_java"]
+
+        # 存储MIDI通道信息
+        _info_list = {}
+        # 存储tempo信息
+        _tempo_list = [(0, 500000), (float("INF"), 0)]
+        # 存储临时音符数据
+        _note_buffer = {}
+        # 存储音量数据，用于平均音量的计算
+        _average_volume = [0, 0]
+
+        # 遍历每个轨道
+        for _track in _midi_file.tracks:
+            # 设置轨道初始时间
+            _time = 0
+
+            # 遍历每个音符
+            for _message in _track:
+                # 累加时间，将时间差表示转为时间轴表示
+                _time += _message.time
+
+                # 判断该事件是否有通道数据，如果有并且通道没有初始化数据就初始化该通道
+                if hasattr(_message, "channel"):
+                    if _message.channel not in _info_list:
+                        _info_list[_message.channel] = {
+                            "program": [(0, _profile["sound_list"]["default"]), (float("INF"), 0)],
+                            "volume": [(0, 1), (float("INF"), 0)], "pan": [(0, [0, 0]), (float("INF"), [0, 0])]}
+
+                # 获取tempo信息，并按时间顺序添加到列表中
+                if _message.type == "set_tempo":
+                    for _n, _value in enumerate(_tempo_list):
+                        if _value[0] > _time:
+                            _tempo_list.insert(_n, (_time, _message.tempo))
+                            break
+
+                # 获取MIDI控制事件
+                if _message.type == "control_change":
+                    _channel = _message.channel
+
+                    # 通道音量控制器，调整某个通道音量
+                    if _message.control == 7:
+                        for _n, _value in enumerate(_info_list[_channel]["volume"]):
+                            if _value[0] > _time:
+                                _info_list[_channel]["volume"].insert(_n, (_time, _message.value / 127))
+                                break
+
+                    # 通道声像控制器
+                    elif _message.control == 10:
+                        _radian = math.radians(_message.value * 1.40625)
+                        for _n, _value in enumerate(_info_list[_channel]["pan"]):
+                            if _value[0] > _time:
+                                _info_list[_channel]["pan"].insert(_n, (_time, [round_45(math.cos(_radian), 2),
+                                                                                round_45(math.sin(_radian), 2)]))
+                                break
+
+                    # 清除通道效果控制器
+                    elif _message.control == 121:
+                        for _n, _value in enumerate(_info_list[_channel]["volume"]):
+                            if _value[0] > _time:
+                                _info_list[_channel]["volume"].insert(_n, (_time, 1))
+                                break
+                        for _n, _value in enumerate(_info_list[_channel]["pan"]):
+                            if _value[0] > _time:
+                                _info_list[_channel]["pan"].insert(_n, (_time, [0, 1]))
+                                break
+
+                # 获取通道音色事件
+                if _message.type == "program_change":
+                    # 先把乐器代号从int类型转为str类型，方便使用
+                    _program = str(_message.program)
+                    _channel = _message.channel
+
+                    # 判断是否是打击乐器专属的轨道，如果是就不添加音色信息，因为打击乐器用note来表示音色
+                    if _channel != 9:
+                        for _n, _value in enumerate(_info_list[_channel]["program"]):
+                            if _value[0] > _time:
+                                if _program in _profile["sound_list"]:
+                                    _info_list[_channel]["program"].insert(_n,
+                                                                           (_time, _profile["sound_list"][_program]))
+                                else:
+                                    _info_list[_channel]["program"].insert(_n,
+                                                                           (_time, _profile["sound_list"]["undefined"]))
+                                break
+
+                # 获取音符信息
+                if _message.type == "note_on" and _message.velocity != 0:
+                    # 对音符力度（音量）进行归一化处理
+                    _velocity = _message.velocity / 127
+                    _channel = _message.channel
+                    # 一般音符用于表示音调，打击乐器（第十轨道上的音符）用于表示音色
+                    _pitch = _message.note
+
+                    # 判断是否禁用了打击乐器，如果禁用并且当前是打击乐器音符就跳过
+                    if _channel == 9 and not _setting["percussion"]:
+                        continue
+
+                    # 读取该音符所在通道的通道音量
+                    for _value in _info_list[_channel]["volume"]:
+                        if _value[0] > _time:
+                            break
+                        else:
+                            _volume = _value[1]
+
+                    # 读取该音符所在通道的通道声像
+                    for _value in _info_list[_channel]["pan"]:
+                        if _value[0] > _time:
+                            break
+                        else:
+                            _pan = _value[1]
+
+                    # 如果是打击乐器就获取配置文件中对应的乐器，否则获取音调和该音符所在通道的通道音色
+                    if _channel == 9:
+                        if str(_pitch) in _profile["sound_list"]["percussion"]:
+                            _program = _profile["sound_list"]["percussion"][str(_pitch)]
+                        else:
+                            _program = _profile["sound_list"]["percussion"]["undefined"]
+                        _pitch = 1
+                    else:
+                        for _value in _info_list[_channel]["program"]:
+                            if _value[0] > _time:
+                                break
+                            else:
+                                _program = _value[1]
+                        if 21 <= _pitch <= 108:
+                            _pitch = global_asset["profile"]["note_list"][_pitch - 21]
+                        else:
+                            continue
+
+                    # 检查配置文件中是否禁用了该乐器，是就跳过
+                    if _program == "disable":
+                        continue
+
+                    # 音符力度（音量）乘以音符所在的通道音量
+                    _velocity *= _volume
+
+                    # 将音符时间转为游戏tick时间
+                    _tick_time = 0
+                    for _n in range(1, len(_tempo_list)):
+                        if _tempo_list[_n][0] <= _time:
+                            _tick_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0],
+                                                           _midi_file.ticks_per_beat, _tempo_list[_n - 1][1]) * 2000 / \
+                                          _setting["speed"]
+                        else:
+                            _tick_time += mido.tick2second(_time - _tempo_list[_n - 1][0], _midi_file.ticks_per_beat,
+                                                           _tempo_list[_n - 1][1]) * 2000 / _setting["speed"]
+                            break
+                    # 时间取整
+                    _tick_time = int(round_45(_tick_time))
+
+                    # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
+                    for _n, _note in enumerate(_program):
+                        # 如果禁用单音符对应多个我的世界乐器的功能，仅循环一次就退出
+                        if _n > 0 and not _setting["adjustment"]:
+                            break
+
+                        # 累加配置文件中我的世界乐器之间的时间间隔
+                        _tick_time += _note[3]
+
+                        _note_pitch = _pitch
+                        _note_velocity = _velocity
+
+                        # 如果启用调整音符功能，则会根据配置文件对音量和音调进行调整
+                        if _setting["adjustment"]:
+                            _note_velocity *= _note[1]
+                            _note_pitch = round_45(_note_pitch * _note[2], 2)
+
+                        # Java版不允许音调范围超出0.5~2.0之间，否则会报错
+                        if _setting["edition"] == 1 and not 0.5 <= _pitch <= 2:
+                            continue
+
+                        # 将音量限制在100%下
+                        if _note_velocity >= 1:
+                            _note_velocity = 1
+                        else:
+                            _note_velocity = round_45(_velocity, 2)
+
+                        # 如果启用控制平均音量功能，就记录音量信息
+                        if _setting["volume"]:
+                            _average_volume[0] += 1
+                            _average_volume[1] += _note_velocity
+
+                        # 判断音符缓存中是否有改时间，如果没有就创建该时间
+                        if _tick_time not in _note_buffer:
+                            _note_buffer[_tick_time] = []
+
+                        # 向该时间中添加音符数据
+                        _note_buffer[_tick_time].append(
+                            {"program": _note[0], "pitch": _note_pitch, "velocity": _note_velocity, "pan": _pan})
+
+        # 调整音量，用于控制平均音量功能
+        if _average_volume[0]:
+            _average_volume = _average_volume[1] / _average_volume[0]
+            for _k in _note_buffer:
+                for _i in _note_buffer[_k]:
+                    _i["velocity"] *= (_setting["volume"] / 100) / _average_volume
+                    if _i["velocity"] >= 1:
+                        _i["velocity"] = 1
+                    else:
+                        _i["velocity"] = round_45(_i["velocity"], 2)
+
+        # 获取第一个音符时间，用于跳过静音功能
+        if _setting["skip"]:
+            _time_offset = min(list(_note_buffer))
+        else:
+            _time_offset = 0
+
+        # 根据需要将音符数据转为各种文件
+        if os.path.exists("Cache/convertor"):
+            shutil.rmtree("Cache/convertor")
+        os.makedirs("Cache/convertor")
+
+        _music_name = os.path.splitext(os.path.basename(_setting["file"]))[0]
+
+        if _setting["output_format"] == 0:
+            with open("Cache/convertor/raw_command.txt", "w", encoding="utf-8") as _io:
+                _io.write("# music_name=" + _music_name + "\n")
+                _io.write("# structure_id=" + str(_task_id) + "\n")
+                _io.write("# length_of_time=" + str(max(list(_note_buffer))) + "\n")
+                _io.write(
+                    "# structure_path=Asset/mcstructure/" + global_asset["structure"][_setting["structure"]] + "\n")
+
+                _real_time = _time_offset
+
+                if _setting["command_type"] == 0:
+                    _raw_cmd = _profile["command"]["command_delay"]
+                elif _setting["command_type"] == 1:
+                    _raw_cmd = _profile["command"]["command_clock"][0]
+                elif _setting["command_type"] == 2:
+                    _raw_cmd = _profile["command"]["command_address"][0]
+
+                for _k in sorted(list(_note_buffer)):
+                    for _n, _i in enumerate(_note_buffer[_k]):
+                        _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
+                            "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting[
+                                "panning"] else "~ ~ ~")).replace(
+                            "{VOLUME}", str(_i["velocity"])).replace(
+                            "{PITCH}", str(_i["pitch"])).replace(
+                            "{TIME}", str(_k - _time_offset)).replace(
+                            "{ADDRESS}", str(_task_id))
+                        _io.write(
+                            ("# tick_delay=" + str(_k - _real_time) + "\n" if _setting["command_type"] == 0 else ""))
+                        _io.write(_cmd + "\n")
+                        _real_time = _k
+
+                if _setting["command_type"] == 1:
+                    _raw_cmd = _profile["command"]["command_clock"][1:]
+                elif _setting["command_type"] == 2:
+                    _raw_cmd = _profile["command"]["command_address"][1:]
+                else:
+                    _raw_cmd = []
+
+                for _cmd in _raw_cmd:
+                    _io.write(
+                        _cmd.replace("{TIME}", str(max(list(_note_buffer)))).replace("{ADDRESS}", str(_task_id)) + "\n")
+
+            subprocess.Popen("Writer/writer.exe").wait()
+
+            if not os.path.exists("Cache/convertor/structure.mcstructure"):
+                return
+
+            if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT", initialfile=_music_name,
+                                                          filetypes=[("Structure Files", ".mcstructure")],
+                                                          defaultextension=".mcstructure"):
+                if os.path.exists(_save_path):
+                    os.remove(_save_path)
+                shutil.copyfile("Cache/convertor/structure.mcstructure", _save_path)
+        elif _setting["output_format"] == 1:
+            with open("Cache/convertor/function.mcfunction", "w", encoding="utf-8") as _io:
+                if _setting["command_type"] == 1:
+                    _raw_cmd = _profile["command"]["command_clock"][0]
+                elif _setting["command_type"] == 2:
+                    _raw_cmd = _profile["command"]["command_address"][0]
+                else:
+                    return
+
+                if _raw_cmd[0] == "/":
+                    _raw_cmd = _raw_cmd[1:]
+
+                for _k in sorted(list(_note_buffer)):
+                    for _n, _i in enumerate(_note_buffer[_k]):
+                        _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
+                            "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting[
+                                "panning"] else "~ ~ ~")).replace(
+                            "{VOLUME}", str(_i["velocity"])).replace(
+                            "{PITCH}", str(_i["pitch"])).replace(
+                            "{TIME}", str(_k - _time_offset)).replace(
+                            "{ADDRESS}", str(_task_id))
+                        _io.write(_cmd + "\n")
+
+                if _setting["command_type"] == 1:
+                    _raw_cmd = _profile["command"]["command_clock"][1:]
+                elif _setting["command_type"] == 2:
+                    _raw_cmd = _profile["command"]["command_address"][1:]
+                else:
+                    _raw_cmd = []
+
+                for _cmd in _raw_cmd:
+                    if _cmd[0] == "/":
+                        _cmd = _cmd[1:]
+                    _io.write(
+                        _cmd.replace("{TIME}", str(max(list(_note_buffer)))).replace("{ADDRESS}", str(_task_id)) + "\n")
+
+            if _setting["edition"] == 0:
+                os.makedirs("Cache/convertor/function_pack/functions")
+
+                with open("Asset/text/manifest.json", "rb") as _io:
+                    _manifest_file = json.loads(_io.read())
+
+                _manifest_file["header"]["name"] = _music_name
+                _manifest_file["header"]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(
+                    12)
+                _manifest_file["modules"][0]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(
+                    4) + "-" + uuid(12)
+
+                _behavior_file = [
+                    {"pack_id": _manifest_file["header"]["uuid"], "version": _manifest_file["header"]["version"]}]
+
+                shutil.copyfile("Cache/convertor/function.mcfunction",
+                                "Cache/convertor/function_pack/functions/midi_player.mcfunction")
+
+                with open("Cache/convertor/function_pack/manifest.json", "w") as _io:
+                    _io.write(json.dumps(_manifest_file))
+
+                with open("Cache/convertor/function_pack/world_behavior_packs.json", "w") as _io:
+                    _io.write(json.dumps(_behavior_file))
+            elif _setting["edition"] == 1:
+                os.makedirs("Cache/convertor/function_pack/data/mms/functions")
+
+                _behavior_file = {"pack": {"pack_format": 1, "description": "§bby §dMIDI-MCSTRUCTURE"}}
+
+                shutil.copyfile("Cache/convertor/function.mcfunction",
+                                "Cache/convertor/function_pack/data/mms/functions/midi_player.mcfunction")
+
+                with open("Cache/convertor/function_pack/pack.mcmeta", "w") as _io:
+                    _io.write(json.dumps(_behavior_file))
+
+            if _setting["version"] == 0 and _setting["edition"] == 1:
+                if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT", initialfile=_music_name,
+                                                              filetypes=[("Function Files", ".mcfunction")],
+                                                              defaultextension=".mcfunction"):
+                    if os.path.exists(_save_path):
+                        os.remove(_save_path)
+                    shutil.copyfile("Cache/convertor/function.mcfunction", _save_path)
+            else:
+                if _save_path := filedialog.askdirectory(title="MIDI-MCSTRUCTURE NEXT"):
+                    _save_path += "/" + _music_name
+                    _n = 0
+                    while True:
+                        if os.path.exists(_save_path + ("-" + str(_n) if _n else "")):
+                            _n += 1
+                        else:
+                            shutil.copytree("Cache/convertor/function_pack", _save_path + ("-" + str(_n) if _n else ""))
+                            break
+    except:
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+    finally:
+        remove_page(overlay_page)
+
+# 页面渲染函数
 def render_page(_root, _overlay, _event):
 
     _pages_num = len(_overlay)
@@ -85,6 +464,7 @@ def render_page(_root, _overlay, _event):
         if _overlay[_n][2] == 0:
             del _overlay[_n]
 
+# 功能函数
 def to_alpha(_origin_surf, _color_value, _surf_size=None, _surf_position=(0, 0)):
     if _surf_size is None:
         _surf_size = _origin_surf.get_size()
@@ -93,6 +473,21 @@ def to_alpha(_origin_surf, _color_value, _surf_size=None, _surf_position=(0, 0))
     _origin_surf.blit(_alpha_surf, _surf_position, special_flags=pygame.BLEND_RGBA_MULT)
     return _origin_surf
 
+def round_45(_i, _n=0):
+    _i = int(_i * 10 ** int(_n + 1))
+    if _i % 10 >= 5:
+        _i += 10
+    _i = int(_i / 10)
+    return _i / (10 ** int(_n))
+
+def uuid(_n):
+    _uuid = ""
+    while _n:
+        _uuid += str(hex(random.randint(0, 15)))[2:]
+        _n -= 1
+    return _uuid
+
+# GUI页面管理函数
 def add_page(_overlay, _page, _position=0, _back=True):
     _overlay.append(_page + [_position, True, _back])
 
@@ -103,6 +498,58 @@ def remove_page(_overlay):
             _overlay[_n][3] = False
             break
 
+# 版本更新函数
+def get_version_list():
+    try:
+        _update_log = json.loads(requests.get("https://gitee.com/mrdxhmagic/midi-mcstructure_next/raw/master/update.json").content)
+
+        global_info["update_list"] = []
+        for _i in _update_log:
+            if _i["API"] == 0:
+                global_info["update_list"].append(_i)
+
+        _length = len(global_info["update_list"])
+
+        for _x in range(_length):
+            for _y in range(_length - _x - 1):
+                if global_info["update_list"][_y]["version"] < global_info["update_list"][_y + 1]["version"]:
+                    global_info["update_list"][_y], global_info["update_list"][_y + 1] = global_info["update_list"][_y + 1], global_info["update_list"][_y]
+
+        global_info["new_version"] = global_info["update_list"][0]["version"] > global_info["setting"]["version"]
+    except:
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+
+def download(_url, _state, _target_hash="", _file_name="package.7z"):
+    try:
+        _state["state"] = 0
+
+        if os.path.exists("Cache/download"):
+            shutil.rmtree("Cache/download")
+        os.makedirs("Cache/download")
+
+        _real_hash = hashlib.md5()
+        _response = requests.get(_url, stream=True)
+
+        _response.raise_for_status()
+
+        _state["total"] = int(_response.headers['content-length'])
+
+        with open("Cache/download/" + _file_name, 'ab') as _io:
+            for _data_chunk in _response.iter_content(chunk_size=1024):
+                _state["downloaded"] += len(_data_chunk)
+                _real_hash.update(_data_chunk)
+                _io.write(_data_chunk)
+
+        if _target_hash and _target_hash != str(_real_hash.hexdigest()):
+            raise IOError("Broken Package, Please Try Again.")
+    except:
+        _state["state"] = -1
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+    finally:
+        if _state["state"] != -1:
+            _state["state"] = 1
+
+# 各种回调函数（用于GUI）
 def start_to_game():
     add_page(overlay_page, [convertor_screen, {"config": [["选择文件", 0, ask_file], ["游戏版本", 0, ask_edition], ["常用设置", 0, ask_setting], ["其他设置", 0, ask_other_setting], ["开始", 0, start_task]]}])
 
@@ -276,56 +723,6 @@ def software_setting_screen(_info, _input):
     _root.blit(_mask, (0, 0))
 
     return _root
-
-def get_version_list():
-    try:
-        _update_log = json.loads(requests.get("https://gitee.com/mrdxhmagic/midi-mcstructure_next/raw/master/update.json").content)
-
-        global_info["update_list"] = []
-        for _i in _update_log:
-            if _i["API"] == 0:
-                global_info["update_list"].append(_i)
-
-        _length = len(global_info["update_list"])
-
-        for _x in range(_length):
-            for _y in range(_length - _x - 1):
-                if global_info["update_list"][_y]["version"] < global_info["update_list"][_y + 1]["version"]:
-                    global_info["update_list"][_y], global_info["update_list"][_y + 1] = global_info["update_list"][_y + 1], global_info["update_list"][_y]
-
-        global_info["new_version"] = global_info["update_list"][0]["version"] > global_info["setting"]["version"]
-    except:
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
-
-def download(_url, _state, _target_hash="", _file_name="package.7z"):
-    try:
-        _state["state"] = 0
-
-        if os.path.exists("Cache/download"):
-            shutil.rmtree("Cache/download")
-        os.makedirs("Cache/download")
-
-        _real_hash = hashlib.md5()
-        _response = requests.get(_url, stream=True)
-
-        _response.raise_for_status()
-
-        _state["total"] = int(_response.headers['content-length'])
-
-        with open("Cache/download/" + _file_name, 'ab') as _io:
-            for _data_chunk in _response.iter_content(chunk_size=1024):
-                _state["downloaded"] += len(_data_chunk)
-                _real_hash.update(_data_chunk)
-                _io.write(_data_chunk)
-
-        if _target_hash and _target_hash != str(_real_hash.hexdigest()):
-            raise IOError("Broken Package, Please Try Again.")
-    except:
-        _state["state"] = -1
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
-    finally:
-        if _state["state"] != -1:
-            _state["state"] = 1
 
 def show_version_list():
     add_page(overlay_page, [version_list_screen, {"index": 0, "state": [], "config": [["", 0], ["◀                                                                                                                    ", 0], ["                                                                                                                    ▶", 0], ["查看该版本详情", 0], ["下载并安装该版本", 0]]}])
@@ -697,323 +1094,8 @@ def start_task():
     threading.Thread(target=convertor, args=(global_info["convertor"].copy(), global_info["setting"]["id"])).start()
     global_info["setting"]["id"] += 1
 
-def uuid(_n):
-    _uuid = ""
-    while _n:
-        _uuid += str(hex(random.randint(0, 15)))[2:]
-        _n -= 1
-    return _uuid
-
-def convertor(_setting, _task_id):
-    add_page(overlay_page, [processing_screen, {"config": [["选择文件", 0, ask_file], ["游戏版本", 0, ask_edition], ["常用设置", 0, ask_setting], ["其他设置", 0, ask_other_setting], ["开始", 0, ask_file]]}])
-    try:
-        _midi_file = mido.MidiFile(_setting["file"], clip=True)
-
-        if global_info["convertor"]["edition"] == 0:
-            if global_info["convertor"]["version"] == 0:
-                _profile = global_asset["profile"]["old_bedrock"]
-            elif global_info["convertor"]["version"] == 1:
-                _profile = global_asset["profile"]["new_bedrock"]
-        elif global_info["convertor"]["edition"] == 1:
-            if global_info["convertor"]["version"] == 0:
-                _profile = global_asset["profile"]["old_java"]
-            elif global_info["convertor"]["version"] == 1:
-                _profile = global_asset["profile"]["new_java"]
-
-        _info_list = {}
-        _tempo_list = [(0, 500000), (float("INF"), 0)]
-        _note_buffer = {}
-        _average_volume = [0, 0]
-
-        for _track in _midi_file.tracks:
-            _time = 0
-            for _message in _track:
-                _time += _message.time
-
-                if hasattr(_message, "channel"):
-                    if _message.channel not in _info_list:
-                        _info_list[_message.channel] = {"program": [(0, _profile["sound_list"]["default"]), (float("INF"), 0)], "volume": [(0, 1), (float("INF"), 0)], "pan": [(0, [0, 0]), (float("INF"), [0, 0])]}
-
-                if _message.type == "set_tempo":
-                    for _n, _value in enumerate(_tempo_list):
-                        if _value[0] > _time:
-                            _tempo_list.insert(_n, (_time, _message.tempo))
-                            break
-
-                if _message.type == "control_change":
-                    _channel = _message.channel
-
-                    if _message.control == 7:
-                        for _n, _value in enumerate(_info_list[_channel]["volume"]):
-                            if _value[0] > _time:
-                                _info_list[_channel]["volume"].insert(_n, (_time, _message.value / 127))
-                                break
-
-                    elif _message.control == 10:
-                        _radian = math.radians(_message.value * 1.40625)
-                        for _n, _value in enumerate(_info_list[_channel]["pan"]):
-                            if _value[0] > _time:
-                                _info_list[_channel]["pan"].insert(_n, (_time, [round_45(math.cos(_radian), 2), round_45(math.sin(_radian), 2)]))
-                                break
-
-                    elif _message.control == 121:
-                        for _n, _value in enumerate(_info_list[_channel]["volume"]):
-                            if _value[0] > _time:
-                                _info_list[_channel]["volume"].insert(_n, (_time, 1))
-                                break
-
-                if _message.type == "program_change":
-                    _program = str(_message.program)
-                    _channel = _message.channel
-
-                    if _channel != 9:
-                        for _n, _value in enumerate(_info_list[_channel]["program"]):
-                            if _value[0] > _time:
-                                if _program in _profile["sound_list"]:
-                                    _info_list[_channel]["program"].insert(_n, (_time, _profile["sound_list"][_program]))
-                                else:
-                                    _info_list[_channel]["program"].insert(_n, (_time, _profile["sound_list"]["undefined"]))
-                                break
-
-                if _message.type == "note_on" and _message.velocity != 0:
-                    _velocity = _message.velocity / 127
-                    _channel = _message.channel
-                    _pitch = _message.note
-
-                    if _channel == 9 and not _setting["percussion"]:
-                        continue
-
-                    for _value in _info_list[_channel]["volume"]:
-                        if _value[0] > _time:
-                            break
-                        else:
-                            _volume = _value[1]
-
-                    for _value in _info_list[_channel]["pan"]:
-                        if _value[0] > _time:
-                            break
-                        else:
-                            _pan = _value[1]
-
-                    if _channel == 9:
-                        if str(_pitch) in _profile["sound_list"]["percussion"]:
-                            _program = _profile["sound_list"]["percussion"][str(_pitch)]
-                        else:
-                            _program = _profile["sound_list"]["percussion"]["undefined"]
-                        _pitch = 1
-                    else:
-                        for _value in _info_list[_channel]["program"]:
-                            if _value[0] > _time:
-                                break
-                            else:
-                                _program = _value[1]
-                        if 21 <= _pitch <= 108:
-                            _pitch = global_asset["profile"]["note_list"][_pitch - 21]
-                        else:
-                            continue
-
-                    if _program == "disable":
-                        continue
-
-                    _velocity *= _volume
-
-                    _tick_time = 0
-                    for _n in range(1, len(_tempo_list)):
-                        if _tempo_list[_n][0] <= _time:
-                            _tick_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], _midi_file.ticks_per_beat, _tempo_list[_n - 1][1]) * 2000 / _setting["speed"]
-                        else:
-                            _tick_time += mido.tick2second(_time - _tempo_list[_n - 1][0], _midi_file.ticks_per_beat, _tempo_list[_n - 1][1]) * 2000 / _setting["speed"]
-                            break
-                    _tick_time = int(round_45(_tick_time))
-
-                    for _n, _note in enumerate(_program):
-                        if _n > 0 and not _setting["adjustment"]:
-                            break
-
-                        _tick_time += _note[3]
-                        _note_pitch = _pitch
-                        _note_velocity = _velocity
-
-                        if _setting["adjustment"]:
-                            _note_velocity *= _note[1]
-                            _note_pitch = round_45(_note_pitch * _note[2], 2)
-
-                        if _setting["edition"] == 1 and not 0.5 <= _pitch <= 2:
-                            continue
-
-                        if _note_velocity >= 1:
-                            _note_velocity = 1
-                        else:
-                            _note_velocity = round_45(_velocity, 2)
-
-                        if _setting["volume"]:
-                            _average_volume[0] += 1
-                            _average_volume[1] += _note_velocity
-
-                        if _tick_time not in _note_buffer:
-                            _note_buffer[_tick_time] = []
-                        _note_buffer[_tick_time].append({"program": _note[0], "pitch": _note_pitch, "velocity": _note_velocity, "pan": _pan})
-
-        if _average_volume[0]:
-            _average_volume = _average_volume[1] / _average_volume[0]
-            for _k in _note_buffer:
-                for _i in _note_buffer[_k]:
-                    _i["velocity"] *= (_setting["volume"] / 100) / _average_volume
-                    if _i["velocity"] >= 1:
-                        _i["velocity"] = 1
-                    else:
-                        _i["velocity"] = round_45(_i["velocity"], 2)
-
-        if _setting["skip"]:
-            _time_offset = min(list(_note_buffer))
-        else:
-            _time_offset = 0
-
-        if os.path.exists("Cache/convertor"):
-            shutil.rmtree("Cache/convertor")
-        os.makedirs("Cache/convertor")
-
-        _music_name = os.path.splitext(os.path.basename(_setting["file"]))[0]
-
-        if _setting["output_format"] == 0:
-            with open("Cache/convertor/raw_command.txt", "w", encoding="utf-8") as _io:
-                _io.write("# music_name=" + _music_name + "\n")
-                _io.write("# structure_id=" + str(_task_id) + "\n")
-                _io.write("# length_of_time=" + str(max(list(_note_buffer))) + "\n")
-                _io.write("# structure_path=Asset/mcstructure/" + global_asset["structure"][_setting["structure"]] + "\n")
-
-                _real_time = _time_offset
-
-                if _setting["command_type"] == 0:
-                    _raw_cmd = _profile["command"]["command_delay"]
-                elif _setting["command_type"] == 1:
-                    _raw_cmd = _profile["command"]["command_clock"][0]
-                elif _setting["command_type"] == 2:
-                    _raw_cmd = _profile["command"]["command_address"][0]
-
-                for _k in sorted(list(_note_buffer)):
-                    for _n, _i in enumerate(_note_buffer[_k]):
-                        _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
-                            "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting["panning"] else "~ ~ ~")).replace(
-                            "{VOLUME}", str(_i["velocity"])).replace(
-                            "{PITCH}", str(_i["pitch"])).replace(
-                            "{TIME}", str(_k - _time_offset)).replace(
-                            "{ADDRESS}", str(_task_id))
-                        _io.write(("# tick_delay=" + str(_k - _real_time) + "\n" if _setting["command_type"] == 0 else ""))
-                        _io.write(_cmd + "\n")
-                        _real_time = _k
-
-                if _setting["command_type"] == 1:
-                    _raw_cmd = _profile["command"]["command_clock"][1:]
-                elif _setting["command_type"] == 2:
-                    _raw_cmd = _profile["command"]["command_address"][1:]
-                else:
-                    _raw_cmd = []
-
-                for _cmd in _raw_cmd:
-                    _io.write(_cmd.replace("{TIME}", str(max(list(_note_buffer)))).replace("{ADDRESS}", str(_task_id)) + "\n")
-
-            subprocess.Popen("Writer/writer.exe").wait()
-
-            if not os.path.exists("Cache/convertor/structure.mcstructure"):
-                return
-
-            if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT", initialfile=_music_name, filetypes=[("Structure Files", ".mcstructure")], defaultextension=".mcstructure"):
-                if os.path.exists(_save_path):
-                    os.remove(_save_path)
-                shutil.copyfile("Cache/convertor/structure.mcstructure", _save_path)
-        elif _setting["output_format"] == 1:
-            with open("Cache/convertor/function.mcfunction", "w", encoding="utf-8") as _io:
-                if _setting["command_type"] == 1:
-                    _raw_cmd = _profile["command"]["command_clock"][0]
-                elif _setting["command_type"] == 2:
-                    _raw_cmd = _profile["command"]["command_address"][0]
-                else:
-                    return
-
-                if _raw_cmd[0] == "/":
-                    _raw_cmd = _raw_cmd[1:]
-
-                for _k in sorted(list(_note_buffer)):
-                    for _n, _i in enumerate(_note_buffer[_k]):
-                        _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
-                            "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting["panning"] else "~ ~ ~")).replace(
-                            "{VOLUME}", str(_i["velocity"])).replace(
-                            "{PITCH}", str(_i["pitch"])).replace(
-                            "{TIME}", str(_k - _time_offset)).replace(
-                            "{ADDRESS}", str(_task_id))
-                        _io.write(_cmd + "\n")
-
-                if _setting["command_type"] == 1:
-                    _raw_cmd = _profile["command"]["command_clock"][1:]
-                elif _setting["command_type"] == 2:
-                    _raw_cmd = _profile["command"]["command_address"][1:]
-                else:
-                    _raw_cmd = []
-
-                for _cmd in _raw_cmd:
-                    if _cmd[0] == "/":
-                        _cmd = _cmd[1:]
-                    _io.write(_cmd.replace("{TIME}", str(max(list(_note_buffer)))).replace("{ADDRESS}", str(_task_id)) + "\n")
-
-            if _setting["edition"] == 0:
-                os.makedirs("Cache/convertor/function_pack/functions")
-
-                with open("Asset/text/manifest.json", "rb") as _io:
-                    _manifest_file = json.loads(_io.read())
-
-                _manifest_file["header"]["name"] = _music_name
-                _manifest_file["header"]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(12)
-                _manifest_file["modules"][0]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(12)
-
-                _behavior_file = [{"pack_id": _manifest_file["header"]["uuid"], "version": _manifest_file["header"]["version"]}]
-
-                shutil.copyfile("Cache/convertor/function.mcfunction", "Cache/convertor/function_pack/functions/midi_player.mcfunction")
-
-                with open("Cache/convertor/function_pack/manifest.json", "w") as _io:
-                    _io.write(json.dumps(_manifest_file))
-
-                with open("Cache/convertor/function_pack/world_behavior_packs.json", "w") as _io:
-                    _io.write(json.dumps(_behavior_file))
-            elif _setting["edition"] == 1:
-                os.makedirs("Cache/convertor/function_pack/data/mms/functions")
-
-                _behavior_file = {"pack": {"pack_format": 1, "description": "§bby §dMIDI-MCSTRUCTURE"}}
-
-                shutil.copyfile("Cache/convertor/function.mcfunction", "Cache/convertor/function_pack/data/mms/functions/midi_player.mcfunction")
-
-                with open("Cache/convertor/function_pack/pack.mcmeta", "w") as _io:
-                    _io.write(json.dumps(_behavior_file))
-
-            if _setting["version"] == 0 and _setting["edition"] == 1:
-                if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT", initialfile=_music_name, filetypes=[("Function Files", ".mcfunction")], defaultextension=".mcfunction"):
-                    if os.path.exists(_save_path):
-                        os.remove(_save_path)
-                    shutil.copyfile("Cache/convertor/function.mcfunction", _save_path)
-            else:
-                if _save_path := filedialog.askdirectory(title="MIDI-MCSTRUCTURE NEXT"):
-                    _save_path += "/" + _music_name
-                    _n = 0
-                    while True:
-                        if os.path.exists(_save_path + ("-" + str(_n) if _n else "")):
-                            _n += 1
-                        else:
-                            shutil.copytree("Cache/convertor/function_pack", _save_path + ("-" + str(_n) if _n else ""))
-                            break
-    except:
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
-    finally:
-        remove_page(overlay_page)
-
 def processing_screen(_info, _input):
     return global_asset["blur"].copy()
-
-def round_45(_i, _n=0):
-    _i = int(_i * 10 ** int(_n + 1))
-    if _i % 10 >= 5:
-        _i += 10
-    _i = int(_i / 10)
-    return _i / (10 ** int(_n))
 
 global_info = {"exit": 0, "log": [], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False}}
 overlay_page = []
@@ -1070,7 +1152,7 @@ except:
 finally:
     if global_info["log"] and global_info["setting"]["log_level"]:
         with open("log.txt", "a") as io:
-            io.write("[V" + (str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
+            io.write("[" + ("V" + str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
             io.writelines("  " + line + "\n" for line in global_info["log"])
 
     if not os.path.exists("Asset/text"):
@@ -1079,12 +1161,11 @@ finally:
     with open("Asset/text/setting.json", "w") as io:
         io.write(json.dumps(global_info["setting"], indent=2))
 
-    if global_info["exit"] == 3:
+    if global_info["exit"] == 2:
+        subprocess.Popen("Updater/updater.exe")
+    elif global_info["exit"] == 3:
         window.blit(pygame.transform.scale(global_asset["error"], (800, 450)), (0, 0))
         pygame.display.flip()
         time.sleep(3)
-
-    if global_info["exit"] == 2:
-        subprocess.Popen("Updater/updater.exe")
 
     os._exit(0)
