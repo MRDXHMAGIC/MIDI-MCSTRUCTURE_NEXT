@@ -17,6 +17,11 @@ from tkinter import filedialog
 # 加载资源函数
 def asset_load():
     try:
+        with open("Asset/text/setting.json", "rb") as _io:
+            _buffer = json.loads(_io.read())
+            for _k in _buffer:
+                global_info["setting"][_k] = _buffer[_k]
+
         global_asset["loading"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading.png"), global_info["display_size"]).convert_alpha()
         add_page(overlay_page, [loading_screen, {}], 1)
 
@@ -40,6 +45,7 @@ def asset_load():
         global_asset["blur"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/blur_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["config"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/config_background.png"), (760, 40)).convert_alpha()
         global_asset["logo"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/logo.png"), (560, 64)).convert_alpha()
+        global_asset["message_mask"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/mask.png"), (800, 40)).convert_alpha()
 
         global_asset["structure"] = []
         for _n in os.listdir("Asset/mcstructure"):
@@ -49,22 +55,39 @@ def asset_load():
                 else:
                     global_asset["structure"].append(_n)
 
+        with open("Asset/text/mapping.json", "rb") as _io:
+            _mapping = json.loads(_io.read())
+
         with open("Asset/text/profile.json", "rb") as _io:
             global_asset["profile"] = json.loads(_io.read())
 
-        with open("Asset/text/setting.json", "rb") as _io:
-            _buffer = json.loads(_io.read())
-            for _k in _buffer:
-                global_info["setting"][_k] = _buffer[_k]
+        for _k in ("new_bedrock", "old_bedrock", "new_java", "old_java"):
+            global_asset["profile"][_k]["sound_list"] = translate_mapping_profile(_mapping, global_asset["profile"][_k]["sound_list"])
 
         threading.Thread(target=get_version_list).start()
 
         time.sleep(1)
 
+        global_info["message"].append("小提示：使用鼠标左右键来进入或返回页面！")
+
         add_page(overlay_page, [menu_screen, {"config": [["转换文件", 0, start_to_game], ["设置", 0, ask_software_setting], ["关于MIDI-MCSTRUCTURE", 0, show_about]]}], 0, False)
     except:
         global_info["exit"] = 3
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+
+def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
+    _sound_list = {}
+
+    for _k in _mapping:
+        if isinstance(_mapping[_k], dict):
+            _sound_list[_k] = translate_mapping_profile(_mapping[_k], _sound)
+        else:
+            if _mapping[_k] in _sound:
+                _sound_list[_k] = _sound[_mapping[_k]]
+            else:
+                _sound_list[_k] = _sound[_mapping["undefined"]]
+
+    return _sound_list
 
 # MIDI转换函数
 def convertor(_setting, _task_id):
@@ -73,7 +96,7 @@ def convertor(_setting, _task_id):
 
     try:
         # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
-        _midi_file = mido.MidiFile(_setting["file"], clip=True)
+        _midi_file = mido.MidiFile(_setting["file"], charset="utf-8", clip=True)
 
         # 根据设置的游戏版本选择合适的配置文件
         if global_info["convertor"]["edition"] == 0:
@@ -93,6 +116,8 @@ def convertor(_setting, _task_id):
         _tempo_list = [(0, 500000), (float("INF"), 0)]
         # 存储临时音符数据
         _note_buffer = {}
+        # 存储临时歌词数据
+        _lyrics_buffer = {}
         # 存储音量数据，用于平均音量的计算
         _average_volume = [0, 0]
 
@@ -136,8 +161,7 @@ def convertor(_setting, _task_id):
                         _radian = math.radians(_message.value * 1.40625)
                         for _n, _value in enumerate(_info_list[_channel]["pan"]):
                             if _value[0] > _time:
-                                _info_list[_channel]["pan"].insert(_n, (_time, [round_45(math.cos(_radian), 2),
-                                                                                round_45(math.sin(_radian), 2)]))
+                                _info_list[_channel]["pan"].insert(_n, (_time, [round_45(math.cos(_radian), 2), round_45(math.sin(_radian), 2)]))
                                 break
 
                     # 清除通道效果控制器
@@ -162,12 +186,20 @@ def convertor(_setting, _task_id):
                         for _n, _value in enumerate(_info_list[_channel]["program"]):
                             if _value[0] > _time:
                                 if _program in _profile["sound_list"]:
-                                    _info_list[_channel]["program"].insert(_n,
-                                                                           (_time, _profile["sound_list"][_program]))
+                                    _info_list[_channel]["program"].insert(_n, (_time, _profile["sound_list"][_program]))
                                 else:
-                                    _info_list[_channel]["program"].insert(_n,
-                                                                           (_time, _profile["sound_list"]["undefined"]))
+                                    _info_list[_channel]["program"].insert(_n, (_time, _profile["sound_list"]["undefined"]))
                                 break
+
+                if _message.type == "lyrics":
+                    # 将音符时间转为游戏tick时间并根据速度设置调整
+                    _tick_time = int(round_45(time_convertor(_time, _tempo_list, _midi_file.ticks_per_beat) / _setting["speed"]))
+
+                    # 判断音符缓存中是否有改时间，如果没有就创建该时间
+                    if _tick_time not in _lyrics_buffer:
+                        _lyrics_buffer[_tick_time] = []
+                    # 向该时间中添加音符数据
+                    _lyrics_buffer[_tick_time].append({"text": _message.text})
 
                 # 获取音符信息
                 if _message.type == "note_on" and _message.velocity != 0:
@@ -220,19 +252,8 @@ def convertor(_setting, _task_id):
                     # 音符力度（音量）乘以音符所在的通道音量
                     _velocity *= _volume
 
-                    # 将音符时间转为游戏tick时间
-                    _tick_time = 0
-                    for _n in range(1, len(_tempo_list)):
-                        if _tempo_list[_n][0] <= _time:
-                            _tick_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0],
-                                                           _midi_file.ticks_per_beat, _tempo_list[_n - 1][1]) * 2000 / \
-                                          _setting["speed"]
-                        else:
-                            _tick_time += mido.tick2second(_time - _tempo_list[_n - 1][0], _midi_file.ticks_per_beat,
-                                                           _tempo_list[_n - 1][1]) * 2000 / _setting["speed"]
-                            break
-                    # 时间取整
-                    _tick_time = int(round_45(_tick_time))
+                    # 将音符时间转为游戏tick时间并根据速度设置调整
+                    _tick_time = int(round_45(time_convertor(_time, _tempo_list, _midi_file.ticks_per_beat) / _setting["speed"]))
 
                     # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
                     for _n, _note in enumerate(_program):
@@ -271,8 +292,7 @@ def convertor(_setting, _task_id):
                             _note_buffer[_tick_time] = []
 
                         # 向该时间中添加音符数据
-                        _note_buffer[_tick_time].append(
-                            {"program": _note[0], "pitch": _note_pitch, "velocity": _note_velocity, "pan": _pan})
+                        _note_buffer[_tick_time].append({"program": _note[0], "pitch": _note_pitch, "velocity": _note_velocity, "pan": _pan})
 
         # 调整音量，用于控制平均音量功能
         if _average_volume[0]:
@@ -285,9 +305,69 @@ def convertor(_setting, _task_id):
                     else:
                         _i["velocity"] = round_45(_i["velocity"], 2)
 
+        _result = {}
+
+        # 分析歌词间隔，自动断句
+        if True:
+            _last_time = 0
+            _average_delay_time = [0, 0]
+            for _k in sorted(list(_lyrics_buffer)):
+                _average_delay_time[1] += _k - _last_time
+                _average_delay_time[0] += 1
+                _last_time = _k
+
+            _average_delay_time = _average_delay_time[1] / _average_delay_time[0]
+
+            _last_time = 0
+            _head_sign = True
+            _lyrics_text = []
+            _lyrics_list = []
+            for _k in sorted(list(_lyrics_buffer)):
+                for _i in _lyrics_buffer[_k]:
+                    if _average_delay_time <= _k - _last_time and not _head_sign:
+                        _lyrics_list.append(_lyrics_text)
+                        _lyrics_text = []
+                    _lyrics_text.append(_i["text"])
+                    _last_time = _k
+                _head_sign = False
+
+            if _lyrics_text:
+                _lyrics_list.append(_lyrics_text)
+
+            _lyrics_mask = 0
+            for _k in sorted(list(_lyrics_buffer)):
+                _lyrics_progress = 0
+                _lyrics_mask += len(_lyrics_buffer[_k])
+                for _i in _lyrics_list:
+                    if _lyrics_mask - _lyrics_progress <= len(_i):
+                        _text = ""
+                        for _n, _t in enumerate(_i):
+                            if _lyrics_mask - _lyrics_progress > _n:
+                                _text += "§d"
+                            else:
+                                _text += "§7"
+                            _text += _t
+
+                        if _k not in _result:
+                            _result[_k] = []
+
+                        _result[_k].append({"type": "text", "text": _text})
+                        break
+
+                    _lyrics_progress += len(_i)
+
+        for _k in _note_buffer:
+            for _i in _note_buffer[_k]:
+                _i["type"] = "note"
+
+                if _k not in _result:
+                    _result[_k] = []
+
+                _result[_k].append(_i)
+
         # 获取第一个音符时间，用于跳过静音功能
         if _setting["skip"]:
-            _time_offset = min(list(_note_buffer))
+            _time_offset = min(list(_result))
         else:
             _time_offset = 0
 
@@ -302,43 +382,44 @@ def convertor(_setting, _task_id):
             with open("Cache/convertor/raw_command.txt", "w", encoding="utf-8") as _io:
                 _io.write("# music_name=" + _music_name + "\n")
                 _io.write("# structure_id=" + str(_task_id) + "\n")
-                _io.write("# length_of_time=" + str(max(list(_note_buffer))) + "\n")
+                _io.write("# length_of_time=" + str(max(list(_result))) + "\n")
                 _io.write(
                     "# structure_path=Asset/mcstructure/" + global_asset["structure"][_setting["structure"]] + "\n")
 
-                _real_time = _time_offset
+                _tick_time = _time_offset
 
                 if _setting["command_type"] == 0:
-                    _raw_cmd = _profile["command"]["command_delay"]
+                    _raw_cmd = _profile["command"]["delay"]
                 elif _setting["command_type"] == 1:
-                    _raw_cmd = _profile["command"]["command_clock"][0]
+                    _raw_cmd = _profile["command"]["clock"][0]
                 elif _setting["command_type"] == 2:
-                    _raw_cmd = _profile["command"]["command_address"][0]
+                    _raw_cmd = _profile["command"]["address"][0]
 
-                for _k in sorted(list(_note_buffer)):
-                    for _n, _i in enumerate(_note_buffer[_k]):
-                        _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
-                            "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting[
-                                "panning"] else "~ ~ ~")).replace(
-                            "{VOLUME}", str(_i["velocity"])).replace(
-                            "{PITCH}", str(_i["pitch"])).replace(
-                            "{TIME}", str(_k - _time_offset)).replace(
-                            "{ADDRESS}", str(_task_id))
-                        _io.write(
-                            ("# tick_delay=" + str(_k - _real_time) + "\n" if _setting["command_type"] == 0 else ""))
+                for _k in sorted(list(_result)):
+                    for _n, _i in enumerate(_result[_k]):
+                        if _i["type"] == "note":
+                            _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
+                                "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting["panning"] else "~ ~ ~")).replace(
+                                "{VOLUME}", str(_i["velocity"])).replace(
+                                "{PITCH}", str(_i["pitch"])).replace(
+                                "{TIME}", str(_k - _time_offset)).replace(
+                                "{ADDRESS}", str(_task_id))
+                        elif _i["type"] == "text":
+                            _cmd = "/title @a actionbar " + _i["text"]
+                        _io.write(("# tick_delay=" + str(_k - _last_time) + "\n" if _setting["command_type"] == 0 else ""))
                         _io.write(_cmd + "\n")
-                        _real_time = _k
+                        _last_time = _k
 
                 if _setting["command_type"] == 1:
-                    _raw_cmd = _profile["command"]["command_clock"][1:]
+                    _raw_cmd = _profile["command"]["clock"][1:]
                 elif _setting["command_type"] == 2:
-                    _raw_cmd = _profile["command"]["command_address"][1:]
+                    _raw_cmd = _profile["command"]["address"][1:]
                 else:
                     _raw_cmd = []
 
                 for _cmd in _raw_cmd:
                     _io.write(
-                        _cmd.replace("{TIME}", str(max(list(_note_buffer)))).replace("{ADDRESS}", str(_task_id)) + "\n")
+                        _cmd.replace("{TIME}", str(max(list(_result)))).replace("{ADDRESS}", str(_task_id)) + "\n")
 
             subprocess.Popen("Writer/writer.exe").wait()
 
@@ -354,20 +435,19 @@ def convertor(_setting, _task_id):
         elif _setting["output_format"] == 1:
             with open("Cache/convertor/function.mcfunction", "w", encoding="utf-8") as _io:
                 if _setting["command_type"] == 1:
-                    _raw_cmd = _profile["command"]["command_clock"][0]
+                    _raw_cmd = _profile["command"]["clock"][0]
                 elif _setting["command_type"] == 2:
-                    _raw_cmd = _profile["command"]["command_address"][0]
+                    _raw_cmd = _profile["command"]["address"][0]
                 else:
                     return
 
                 if _raw_cmd[0] == "/":
                     _raw_cmd = _raw_cmd[1:]
 
-                for _k in sorted(list(_note_buffer)):
-                    for _n, _i in enumerate(_note_buffer[_k]):
+                for _k in sorted(list(_result)):
+                    for _n, _i in enumerate(_result[_k]):
                         _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
-                            "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting[
-                                "panning"] else "~ ~ ~")).replace(
+                            "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting["panning"] else "~ ~ ~")).replace(
                             "{VOLUME}", str(_i["velocity"])).replace(
                             "{PITCH}", str(_i["pitch"])).replace(
                             "{TIME}", str(_k - _time_offset)).replace(
@@ -375,9 +455,9 @@ def convertor(_setting, _task_id):
                         _io.write(_cmd + "\n")
 
                 if _setting["command_type"] == 1:
-                    _raw_cmd = _profile["command"]["command_clock"][1:]
+                    _raw_cmd = _profile["command"]["clock"][1:]
                 elif _setting["command_type"] == 2:
-                    _raw_cmd = _profile["command"]["command_address"][1:]
+                    _raw_cmd = _profile["command"]["address"][1:]
                 else:
                     _raw_cmd = []
 
@@ -385,7 +465,7 @@ def convertor(_setting, _task_id):
                     if _cmd[0] == "/":
                         _cmd = _cmd[1:]
                     _io.write(
-                        _cmd.replace("{TIME}", str(max(list(_note_buffer)))).replace("{ADDRESS}", str(_task_id)) + "\n")
+                        _cmd.replace("{TIME}", str(max(list(_result)))).replace("{ADDRESS}", str(_task_id)) + "\n")
 
             if _setting["edition"] == 0:
                 os.makedirs("Cache/convertor/function_pack/functions")
@@ -422,7 +502,8 @@ def convertor(_setting, _task_id):
                     _io.write(json.dumps(_behavior_file))
 
             if _setting["version"] == 0 and _setting["edition"] == 1:
-                if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT", initialfile=_music_name,
+                if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
+                                                              initialfile=_music_name,
                                                               filetypes=[("Function Files", ".mcfunction")],
                                                               defaultextension=".mcfunction"):
                     if os.path.exists(_save_path):
@@ -439,12 +520,13 @@ def convertor(_setting, _task_id):
                             shutil.copytree("Cache/convertor/function_pack", _save_path + ("-" + str(_n) if _n else ""))
                             break
     except:
+        global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
     finally:
         remove_page(overlay_page)
 
 # 页面渲染函数
-def render_page(_root, _overlay, _event):
+def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
 
     _pages_num = len(_overlay)
 
@@ -464,8 +546,24 @@ def render_page(_root, _overlay, _event):
         if _overlay[_n][2] == 0:
             del _overlay[_n]
 
+    if global_info["message"]:
+        global_info["message_info"][1] += timer.get_time()
+
+        _root.blit(global_asset["message_mask"], (0, 450 - global_info["message_info"][0] * 40))
+        _text_surface = to_alpha(global_asset["font"].render(global_info["message"][0], True, (255, 255, 255)), (255, 255, 255, 255 * global_info["message_info"][0]))
+        _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, 470 - global_info["message_info"][0] * 40 - _text_surface.get_size()[1] / 2))
+
+        if global_info["message_info"][1] <= 3000:
+            global_info["message_info"][0] += (1 - global_info["message_info"][0]) * global_info["animation_speed"]
+        else:
+            global_info["message_info"][0] -= global_info["message_info"][0] * global_info["animation_speed"]
+
+            if global_info["message_info"][0] < 0.01:
+                del global_info["message"][0]
+                global_info["message_info"] = [0, 0]
+
 # 功能函数
-def to_alpha(_origin_surf, _color_value, _surf_size=None, _surf_position=(0, 0)):
+def to_alpha(_origin_surf: pygame.Surface, _color_value, _surf_size=None, _surf_position=(0, 0)) -> pygame.Surface:
     if _surf_size is None:
         _surf_size = _origin_surf.get_size()
     _alpha_surf = pygame.Surface(_surf_size, pygame.SRCALPHA)
@@ -473,19 +571,31 @@ def to_alpha(_origin_surf, _color_value, _surf_size=None, _surf_position=(0, 0))
     _origin_surf.blit(_alpha_surf, _surf_position, special_flags=pygame.BLEND_RGBA_MULT)
     return _origin_surf
 
-def round_45(_i, _n=0):
+def round_45(_i: float, _n=0) -> float:
     _i = int(_i * 10 ** int(_n + 1))
     if _i % 10 >= 5:
         _i += 10
     _i = int(_i / 10)
     return _i / (10 ** int(_n))
 
-def uuid(_n):
+def uuid(_n: int) -> str:
     _uuid = ""
     while _n:
         _uuid += str(hex(random.randint(0, 15)))[2:]
         _n -= 1
     return _uuid
+
+def time_convertor(_time: int, _tempo_list: list, _ticks_per_beat: int) -> float:
+    _tick_time = 0
+
+    for _n in range(1, len(_tempo_list)):
+        if _tempo_list[_n][0] <= _time:
+            _tick_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 2000
+        else:
+            _tick_time += mido.tick2second(_time - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 2000
+            break
+
+    return _tick_time
 
 # GUI页面管理函数
 def add_page(_overlay, _page, _position=0, _back=True):
@@ -629,6 +739,8 @@ def convertor_screen(_info, _input):
                 _text += "，打击乐器"
             if global_info["convertor"]["adjustment"]:
                 _text += "，乐器调整"
+            if global_info["convertor"]["lyrics"]:
+                _text += "，歌词"
         _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[1]))
         _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))
 
@@ -682,14 +794,12 @@ def software_setting_screen(_info, _input):
         _y = 20 + _n * 60
         if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
             _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if _n == 1:
-                if not global_info["setting"]["id"]:
-                    _text = "已重置结构ID"
             if "mouse_left" in _input and not _input["mouse_left"]:
                 if _n == 0:
                     show_version_list()
                 elif _n == 1:
                     global_info["setting"]["id"] = 0
+                    global_info["message"].append("已重置结构ID！")
                 elif _n == 2:
                     global_info["setting"]["fps"] += 30
                     if global_info["setting"]["fps"] > 120:
@@ -949,7 +1059,7 @@ def setting_screen(_info, _input):
 def ask_other_setting():
     if global_info["convertor"]["speed"] == -1:
         global_info["convertor"]["speed"] = 100
-    add_page(overlay_page, [other_setting_screen, {"config": [["播放速度 ", 0], ["声相偏移 ", 0], ["静音跳过 ", 0], ["打击乐器 ", 0], ["乐器调整 ", 0]]}])
+    add_page(overlay_page, [other_setting_screen, {"config": [["播放速度 ", 0], ["声相偏移 ", 0], ["静音跳过 ", 0], ["打击乐器 ", 0], ["乐器调整 ", 0], ["歌词显示 ", 0]]}])
 
 def other_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
@@ -990,6 +1100,11 @@ def other_setting_screen(_info, _input):
                         global_info["convertor"]["adjustment"] = False
                     else:
                         global_info["convertor"]["adjustment"] = True
+                if _n == 5:
+                    if global_info["convertor"]["lyrics"]:
+                        global_info["convertor"]["lyrics"] = False
+                    else:
+                        global_info["convertor"]["lyrics"] = True
         else:
             _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         _root.blit(global_asset["config"], (20, _y))
@@ -1000,23 +1115,28 @@ def other_setting_screen(_info, _input):
             if global_info["convertor"]["speed"] % 10 == 0:
                 _text += "0"
             _text += "倍"
-        if _n == 1:
+        elif _n == 1:
             if global_info["convertor"]["panning"]:
                 _text += "启用"
             else:
                 _text += "关闭"
-        if _n == 2:
+        elif _n == 2:
             if global_info["convertor"]["skip"]:
                 _text += "启用"
             else:
                 _text += "关闭"
-        if _n == 3:
+        elif _n == 3:
             if global_info["convertor"]["percussion"]:
                 _text += "启用"
             else:
                 _text += "关闭"
-        if _n == 4:
+        elif _n == 4:
             if global_info["convertor"]["adjustment"]:
+                _text += "启用"
+            else:
+                _text += "关闭"
+        elif _n == 5:
+            if global_info["convertor"]["lyrics"]:
                 _text += "启用"
             else:
                 _text += "关闭"
@@ -1097,7 +1217,7 @@ def start_task():
 def processing_screen(_info, _input):
     return global_asset["blur"].copy()
 
-global_info = {"exit": 0, "log": [], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False}}
+global_info = {"exit": 0, "log": [], "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": False}}
 overlay_page = []
 global_asset = {}
 
@@ -1146,6 +1266,8 @@ try:
             render_page(window, overlay_page, env_list)
         pygame.display.flip()
         timer.tick(global_info["setting"]["fps"])
+except KeyboardInterrupt:
+    global_info["exit"] = 1
 except:
     global_info["exit"] = 3
     global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
