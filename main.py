@@ -22,6 +22,9 @@ def asset_load():
             for _k in _buffer:
                 global_info["setting"][_k] = _buffer[_k]
 
+        if global_info["setting"]["id"] <= 0:
+            global_info["setting"]["id"] = 1
+
         global_asset["loading"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading.png"), global_info["display_size"]).convert_alpha()
         add_page(overlay_page, [loading_screen, {}], 1)
 
@@ -96,7 +99,7 @@ def convertor(_setting, _task_id):
 
     try:
         # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
-        _midi_file = mido.MidiFile(_setting["file"], charset="utf-8", clip=True)
+        _midi_file = mido.MidiFile(_setting["file"], charset="utf-8" if _setting["lyrics"] else "latin1", clip=True)
 
         # 根据设置的游戏版本选择合适的配置文件
         if global_info["convertor"]["edition"] == 0:
@@ -195,10 +198,10 @@ def convertor(_setting, _task_id):
                     # 将音符时间转为游戏tick时间并根据速度设置调整
                     _tick_time = int(round_45(time_convertor(_time, _tempo_list, _midi_file.ticks_per_beat) / _setting["speed"]))
 
-                    # 判断音符缓存中是否有改时间，如果没有就创建该时间
+                    # 判断歌词缓存中是否有改时间，如果没有就创建该时间
                     if _tick_time not in _lyrics_buffer:
                         _lyrics_buffer[_tick_time] = []
-                    # 向该时间中添加音符数据
+                    # 向该时间中添加歌词数据
                     _lyrics_buffer[_tick_time].append({"text": _message.text})
 
                 # 获取音符信息
@@ -273,7 +276,7 @@ def convertor(_setting, _task_id):
                             _note_pitch = round_45(_note_pitch * _note[2], 2)
 
                         # Java版不允许音调范围超出0.5~2.0之间，否则会报错
-                        if _setting["edition"] == 1 and not 0.5 <= _pitch <= 2:
+                        if _setting["edition"] == 1 and not 0.5 <= _note_pitch <= 2:
                             continue
 
                         # 将音量限制在100%下
@@ -305,10 +308,12 @@ def convertor(_setting, _task_id):
                     else:
                         _i["velocity"] = round_45(_i["velocity"], 2)
 
+        # 存放音符和歌词字幕合并后的最终结果
         _result = {}
 
-        # 分析歌词间隔，自动断句
-        if True:
+        # 歌词数据处理
+        if _setting["lyrics"]:
+            # 计算平均间隔时间
             _last_time = 0
             _average_delay_time = [0, 0]
             for _k in sorted(list(_lyrics_buffer)):
@@ -316,46 +321,71 @@ def convertor(_setting, _task_id):
                 _average_delay_time[0] += 1
                 _last_time = _k
 
-            _average_delay_time = _average_delay_time[1] / _average_delay_time[0]
+            if _average_delay_time[0]:
+                _average_delay_time = _average_delay_time[1] / _average_delay_time[0]
 
-            _last_time = 0
-            _head_sign = True
-            _lyrics_text = []
-            _lyrics_list = []
-            for _k in sorted(list(_lyrics_buffer)):
-                for _i in _lyrics_buffer[_k]:
-                    if _average_delay_time <= _k - _last_time and not _head_sign:
-                        _lyrics_list.append(_lyrics_text)
-                        _lyrics_text = []
-                    _lyrics_text.append(_i["text"])
-                    _last_time = _k
-                _head_sign = False
+                # 根据间隔时间断句
+                _last_time = 0
+                _head_sign = True
+                _lyrics_text = []
+                _lyrics_list = []
+                _lyrics_length = 0
+                for _k in sorted(list(_lyrics_buffer)):
+                    for _i in _lyrics_buffer[_k]:
+                        if _lyrics_length > 20 or (_average_delay_time <= _k - _last_time and not _head_sign):
+                            _lyrics_list.append(_lyrics_text)
+                            _lyrics_length = 0
+                            _lyrics_text = []
+                        _lyrics_text.append(_i["text"])
 
-            if _lyrics_text:
-                _lyrics_list.append(_lyrics_text)
-
-            _lyrics_mask = 0
-            for _k in sorted(list(_lyrics_buffer)):
-                _lyrics_progress = 0
-                _lyrics_mask += len(_lyrics_buffer[_k])
-                for _i in _lyrics_list:
-                    if _lyrics_mask - _lyrics_progress <= len(_i):
-                        _text = ""
-                        for _n, _t in enumerate(_i):
-                            if _lyrics_mask - _lyrics_progress > _n:
-                                _text += "§d"
+                        for _char in _i["text"]:
+                            if _char in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()[]{},.!?;:'\"~+-*/":
+                                _lyrics_length += 0.6
                             else:
-                                _text += "§7"
-                            _text += _t
+                                _lyrics_length += 1
+                    _last_time = _k
+                    _head_sign = False
+                if _lyrics_text:
+                    _lyrics_list.append(_lyrics_text)
 
-                        if _k not in _result:
-                            _result[_k] = []
+                # 渲染歌词字幕
+                _lyrics_mask = 0
+                for _k in sorted(list(_lyrics_buffer)):
+                    _lyrics_progress = 0
+                    _lyrics_mask += len(_lyrics_buffer[_k])
+                    for _i in range(len(_lyrics_list)):
+                        if _lyrics_mask - _lyrics_progress <= len(_lyrics_list[_i]):
+                            _text_f = ""
+                            _text_s = ""
+                            for _n, _t in enumerate(_lyrics_list[_i]):
+                                if _lyrics_mask - _lyrics_progress == _n:
+                                    _text_f = _text_s
+                                    _text_s = ""
+                                _text_s += _t
 
-                        _result[_k].append({"type": "text", "text": _text})
-                        break
+                            if not _text_f:
+                                _text_f = _text_s
+                                _text_s = ""
 
-                    _lyrics_progress += len(_i)
+                            _last_lyrics = ""
+                            if _i - 1 >= 0:
+                                for _t in _lyrics_list[_i - 1]:
+                                    _last_lyrics += _t
 
+                            _next_lyrics = ""
+                            if _i + 1 < len(_lyrics_list):
+                                for _t in _lyrics_list[_i + 1]:
+                                    _next_lyrics += _t
+
+                            # 将歌词数据合并到结果中
+                            if _k not in _result:
+                                _result[_k] = []
+                            _result[_k].append({"type": "lyrics", "last": _last_lyrics, "real_f": _text_f, "real_s": _text_s, "next": _next_lyrics})
+                            break
+
+                        _lyrics_progress += len(_lyrics_list[_i])
+
+        # 将音符数据合并到结果中
         for _k in _note_buffer:
             for _i in _note_buffer[_k]:
                 _i["type"] = "note"
@@ -365,7 +395,7 @@ def convertor(_setting, _task_id):
 
                 _result[_k].append(_i)
 
-        # 获取第一个音符时间，用于跳过静音功能
+        # 获取最早的数据的时间，用于跳过静音功能
         if _setting["skip"]:
             _time_offset = min(list(_result))
         else:
@@ -386,7 +416,7 @@ def convertor(_setting, _task_id):
                 _io.write(
                     "# structure_path=Asset/mcstructure/" + global_asset["structure"][_setting["structure"]] + "\n")
 
-                _tick_time = _time_offset
+                _last_time = _time_offset
 
                 if _setting["command_type"] == 0:
                     _raw_cmd = _profile["command"]["delay"]
@@ -398,16 +428,23 @@ def convertor(_setting, _task_id):
                 for _k in sorted(list(_result)):
                     for _n, _i in enumerate(_result[_k]):
                         if _i["type"] == "note":
-                            _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
+                            _cmd = _raw_cmd.replace(
+                                "{SOUND}", _i["program"]).replace(
                                 "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting["panning"] else "~ ~ ~")).replace(
                                 "{VOLUME}", str(_i["velocity"])).replace(
                                 "{PITCH}", str(_i["pitch"])).replace(
                                 "{TIME}", str(_k - _time_offset)).replace(
                                 "{ADDRESS}", str(_task_id))
-                        elif _i["type"] == "text":
-                            _cmd = "/title @a actionbar " + _i["text"]
+                        elif _i["type"] == "lyrics":
+                            _cmd = _profile["command"]["lyrics"][_setting["command_type"]].replace(
+                                "{LAST}", _i["last"]).replace(
+                                "{REAL_F}", _i["real_f"]).replace(
+                                "{REAL_S}", _i["real_s"]).replace(
+                                "{NEXT}", _i["next"]).replace(
+                                "{TIME}", str(_k - _time_offset)).replace(
+                                "{ADDRESS}", str(_task_id))
                         _io.write(("# tick_delay=" + str(_k - _last_time) + "\n" if _setting["command_type"] == 0 else ""))
-                        _io.write(_cmd + "\n")
+                        _io.write((_cmd[1:] if _cmd[0] == "/" else _cmd) + "\n")
                         _last_time = _k
 
                 if _setting["command_type"] == 1:
@@ -418,8 +455,9 @@ def convertor(_setting, _task_id):
                     _raw_cmd = []
 
                 for _cmd in _raw_cmd:
-                    _io.write(
-                        _cmd.replace("{TIME}", str(max(list(_result)))).replace("{ADDRESS}", str(_task_id)) + "\n")
+                    _io.write(_cmd.replace(
+                        "{TIME}", str(max(list(_result)))).replace(
+                        "{ADDRESS}", str(_task_id)) + "\n")
 
             subprocess.Popen("Writer/writer.exe").wait()
 
@@ -441,18 +479,25 @@ def convertor(_setting, _task_id):
                 else:
                     return
 
-                if _raw_cmd[0] == "/":
-                    _raw_cmd = _raw_cmd[1:]
-
                 for _k in sorted(list(_result)):
                     for _n, _i in enumerate(_result[_k]):
-                        _cmd = _raw_cmd.replace("{SOUND}", _i["program"]).replace(
-                            "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting["panning"] else "~ ~ ~")).replace(
-                            "{VOLUME}", str(_i["velocity"])).replace(
-                            "{PITCH}", str(_i["pitch"])).replace(
-                            "{TIME}", str(_k - _time_offset)).replace(
-                            "{ADDRESS}", str(_task_id))
-                        _io.write(_cmd + "\n")
+                        if _i["type"] == "note":
+                            _cmd = _raw_cmd.replace(
+                                "{SOUND}", _i["program"]).replace(
+                                "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting["panning"] else "~ ~ ~")).replace(
+                                "{VOLUME}", str(_i["velocity"])).replace(
+                                "{PITCH}", str(_i["pitch"])).replace(
+                                "{TIME}", str(_k - _time_offset)).replace(
+                                "{ADDRESS}", str(_task_id))
+                        elif _i["type"] == "lyrics":
+                            _cmd = _profile["command"]["lyrics"][_setting["command_type"]].replace(
+                                "{LAST}", _i["last"]).replace(
+                                "{REAL_F}", _i["real_f"]).replace(
+                                "{REAL_S}", _i["real_s"]).replace(
+                                "{NEXT}", _i["next"]).replace(
+                                "{TIME}", str(_k - _time_offset)).replace(
+                                "{ADDRESS}", str(_task_id))
+                        _io.write((_cmd[1:] if _cmd[0] == "/" else _cmd) + "\n")
 
                 if _setting["command_type"] == 1:
                     _raw_cmd = _profile["command"]["clock"][1:]
@@ -464,8 +509,9 @@ def convertor(_setting, _task_id):
                 for _cmd in _raw_cmd:
                     if _cmd[0] == "/":
                         _cmd = _cmd[1:]
-                    _io.write(
-                        _cmd.replace("{TIME}", str(max(list(_result)))).replace("{ADDRESS}", str(_task_id)) + "\n")
+                    _io.write(_cmd.replace(
+                        "{TIME}", str(max(list(_result)))).replace(
+                        "{ADDRESS}", str(_task_id)) + "\n")
 
             if _setting["edition"] == 0:
                 os.makedirs("Cache/convertor/function_pack/functions")
@@ -798,7 +844,7 @@ def software_setting_screen(_info, _input):
                 if _n == 0:
                     show_version_list()
                 elif _n == 1:
-                    global_info["setting"]["id"] = 0
+                    global_info["setting"]["id"] = 1
                     global_info["message"].append("已重置结构ID！")
                 elif _n == 2:
                     global_info["setting"]["fps"] += 30
@@ -1212,12 +1258,13 @@ def start_task():
     if global_info["convertor"]["speed"] == -1:
         return
     threading.Thread(target=convertor, args=(global_info["convertor"].copy(), global_info["setting"]["id"])).start()
-    global_info["setting"]["id"] += 1
+    if global_info["convertor"]["command_type"] == 2:
+        global_info["setting"]["id"] += 1
 
 def processing_screen(_info, _input):
     return global_asset["blur"].copy()
 
-global_info = {"exit": 0, "log": [], "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 0, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": False}}
+global_info = {"exit": 0, "log": [], "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": False}}
 overlay_page = []
 global_asset = {}
 
