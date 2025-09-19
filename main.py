@@ -536,6 +536,7 @@ def cmd_convertor(_setting: dict, _profile: str, _result: list, _task_id: int, _
             if _list_length == 1:
                 _selector = _profile["command"]["timer_target_selector"]["regular"].replace("{VALUE}", str(_time_list[0]))
             else:
+                _str_length = len(_profile["command"]["timer_target_selector"]["compressed"][0])
                 for _i in range(_list_length + 1):
                     if _i > 0:
                         _start_time = _time_list[_i - 1] + 1
@@ -548,7 +549,7 @@ def cmd_convertor(_setting: dict, _profile: str, _result: list, _task_id: int, _
                         _end_time = ""
 
                     if _selector:
-                        _selector += ","
+                        _selector += _profile["command"]["timer_target_selector"]["compressed"][2]
 
                     if _start_time != "" and _end_time != "":
                         if _start_time == _end_time:
@@ -556,7 +557,7 @@ def cmd_convertor(_setting: dict, _profile: str, _result: list, _task_id: int, _
                                 "{VALUE}", str(_end_time)
                             )
                         elif _start_time > _end_time:
-                            _selector = _selector[:-1]
+                            _selector = _selector[:-_str_length]
                         else:
                             _selector += _profile["command"]["timer_target_selector"]["compressed"][0].replace(
                                 "{VALUE}", _profile["command"]["timer_target_selector"]["compressed"][1].replace(
@@ -627,10 +628,11 @@ def cmd_convertor(_setting: dict, _profile: str, _result: list, _task_id: int, _
     else:
         _raw_cmd = []
 
-    for _cmd in _raw_cmd:
-        _cmd_list.append(_cmd.replace(
+    for _i in _raw_cmd:
+        _cmd = _i.replace(
             "{TIME}", str(max(list(_result)))).replace(
-            "{ADDRESS}", str(_task_id)))
+            "{ADDRESS}", str(_task_id))
+        _cmd_list.append(_cmd[1:] if _cmd[0] == "/" else _cmd)
 
     return _cmd_list
 
