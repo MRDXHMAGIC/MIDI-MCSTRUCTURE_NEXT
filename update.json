@@ -70,5 +70,13 @@
     "edition": "Alpha",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V12250919-Alpha/MIDI-MCSTRUCTURE_NEXT_V12250919-Alpha.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V12250919-Alpha"
+  },
+  {
+    "API": 0,
+    "hash": "28220dd51caa57e8baa17c148da0a26c",
+    "version": 12250920,
+    "edition": "Beta",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V12250920-Beta/MIDI-MCSTRUCTURE_NEXT_V12250920-Beta.7z",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V12250920-Beta"
   }
  ]
