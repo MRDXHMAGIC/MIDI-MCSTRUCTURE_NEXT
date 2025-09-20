@@ -17,10 +17,13 @@ from tkinter import filedialog
 # 加载资源函数
 def asset_load():
     try:
-        with open("Asset/text/setting.json", "rb") as _io:
-            _buffer = json.loads(_io.read())
-            for _k in _buffer:
-                global_info["setting"][_k] = _buffer[_k]
+        if os.path.exists("Asset/text/setting.json"):
+            with open("Asset/text/setting.json", "rb") as _io:
+                _buffer = json.loads(_io.read())
+                for _k in _buffer:
+                    global_info["setting"][_k] = _buffer[_k]
+        elif global_info["setting"]["log_level"] >= 2:
+            global_info["log"].append("[W] setting.json is Not Existing!")
 
         if global_info["setting"]["id"] <= 0:
             global_info["setting"]["id"] = 1
@@ -57,6 +60,8 @@ def asset_load():
                     global_asset["structure"].insert(0, _n)
                 else:
                     global_asset["structure"].append(_n)
+        if global_info["setting"]["log_level"] >= 2 and not global_asset["structure"]:
+            global_info["log"].append("[W] No Structure File!")
 
         with open("Asset/text/mapping.json", "rb") as _io:
             _mapping = json.loads(_io.read())
@@ -99,7 +104,13 @@ def convertor(_setting, _task_id):
 
     try:
         # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
-        _midi_file = mido.MidiFile(_setting["file"], charset="utf-8" if _setting["lyrics"] else "latin1", clip=True)
+        for _charset in ("utf-8", "latin1"):
+            try:
+                _midi_file = mido.MidiFile(_setting["file"], charset=_charset, clip=True)
+                break
+            except:
+                if global_info["setting"]["log_level"] >= 2:
+                    global_info["log"].append("[W] " + _charset + " Can't Decode \"" + os.path.basename(_setting["file"]) + "\"!")
 
         # 根据设置的游戏版本选择合适的配置文件
         if global_info["convertor"]["edition"] == 0:
@@ -423,7 +434,8 @@ def convertor(_setting, _task_id):
             if not os.path.exists("Cache/convertor/structure.mcstructure"):
                 return
 
-            if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT", initialfile=_music_name,
+            if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
+                                                          initialfile=_music_name,
                                                           filetypes=[("Structure Files", ".mcstructure")],
                                                           defaultextension=".mcstructure"):
                 if os.path.exists(_save_path):
@@ -462,7 +474,7 @@ def convertor(_setting, _task_id):
             elif _setting["edition"] == 1:
                 os.makedirs("Cache/convertor/function_pack/data/mms/functions")
 
-                _behavior_file = {"pack": {"pack_format": 1, "description": "§bby §dMIDI-MCSTRUCTURE"}}
+                _behavior_file = {"pack": {"pack_format": 1, "description": "§r§fBy §dMIDI-MCSTRUCTURE §bNEXT"}}
 
                 shutil.copyfile("Cache/convertor/function.mcfunction",
                                 "Cache/convertor/function_pack/data/mms/functions/midi_player.mcfunction")
@@ -494,7 +506,19 @@ def convertor(_setting, _task_id):
     finally:
         remove_page(overlay_page)
 
-def cmd_convertor(_setting: dict, _profile: str, _result: list, _task_id: int, _time_offset: int, _delay_info: bool) -> list:
+def time_convertor(_time: int, _tempo_list: list, _ticks_per_beat: int) -> float:
+    _tick_time = 0
+
+    for _n in range(1, len(_tempo_list)):
+        if _tempo_list[_n][0] <= _time:
+            _tick_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 2000
+        else:
+            _tick_time += mido.tick2second(_time - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 2000
+            break
+
+    return _tick_time
+
+def cmd_convertor(_setting: dict, _profile: dict, _result: list, _task_id: int, _time_offset: int, _delay_info: bool) -> list[str]:
     if _setting["command_type"] == 0:
         _raw_cmd = _profile["command"]["delay"]
     elif _setting["command_type"] == 1:
@@ -588,7 +612,7 @@ def cmd_convertor(_setting: dict, _profile: str, _result: list, _task_id: int, _
                     "{TTS}", _selector).replace(
                     "{ADDRESS}", str(_task_id))
             else:
-                raise TypeError("Unknown Data Type: " + str(_i["type"]))
+                raise TypeError("Unknown Data Type: " + str(_data[0]))
 
             _cmd_list.append(_cmd[1:] if _cmd[0] == "/" else _cmd)
     else:
@@ -695,18 +719,6 @@ def uuid(_n: int) -> str:
         _uuid += str(hex(random.randint(0, 15)))[2:]
         _n -= 1
     return _uuid
-
-def time_convertor(_time: int, _tempo_list: list, _ticks_per_beat: int) -> float:
-    _tick_time = 0
-
-    for _n in range(1, len(_tempo_list)):
-        if _tempo_list[_n][0] <= _time:
-            _tick_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 2000
-        else:
-            _tick_time += mido.tick2second(_time - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 2000
-            break
-
-    return _tick_time
 
 # GUI页面管理函数
 def add_page(_overlay, _page, _position=0, _back=True):
@@ -835,7 +847,7 @@ def convertor_screen(_info, _input):
                 _text += "/时钟与编号"
             if global_info["convertor"]["volume"]:
                 _text += "/" + str(global_info["convertor"]["volume"]) + "%"
-            if global_asset["structure"]:
+            if global_asset["structure"] and global_info["convertor"]["output_format"] == 0:
                 _text += "/" + os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0]
         elif _n == 3 and global_info["convertor"]["speed"] != -1:
             _text = str(global_info["convertor"]["speed"] / 100)
@@ -923,7 +935,7 @@ def software_setting_screen(_info, _input):
                         global_info["setting"]["animation_speed"] = 0
                 elif _n == 4:
                     global_info["setting"]["log_level"] += 1
-                    if global_info["setting"]["log_level"] == 2:
+                    if global_info["setting"]["log_level"] == 3:
                         global_info["setting"]["log_level"] = 0
         else:
             _i[1] += (127 - _i[1]) * global_info["animation_speed"]
@@ -935,9 +947,11 @@ def software_setting_screen(_info, _input):
             _text += str(global_info["setting"]["animation_speed"]) if global_info["setting"]["animation_speed"] else "关"
         elif _n == 4:
             if global_info["setting"]["log_level"] == 0:
-                _text += "Disable"
+                _text += "禁用"
             elif global_info["setting"]["log_level"] == 1:
-                _text += "Error"
+                _text += "错误"
+            elif global_info["setting"]["log_level"] == 2:
+                _text += "警告"
         _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[1]))
@@ -1131,7 +1145,7 @@ def setting_screen(_info, _input):
                     global_info["convertor"]["volume"] += 10
                     if global_info["convertor"]["volume"] >= 110:
                         global_info["convertor"]["volume"] = 0
-                elif _n == 3:
+                elif _n == 3 and global_info["convertor"]["output_format"] == 0:
                     global_info["convertor"]["structure"] += 1
                     if global_info["convertor"]["structure"] >= len(global_asset["structure"]):
                         global_info["convertor"]["structure"] = 0
@@ -1161,7 +1175,9 @@ def setting_screen(_info, _input):
             else:
                 _text += "保持原始音量"
         elif _n == 3:
-            if global_asset["structure"]:
+            if global_info["convertor"]["output_format"] != 0:
+                _text += "不可用"
+            elif global_asset["structure"]:
                 _text += os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0]
             else:
                 _text += "无"
@@ -1362,7 +1378,8 @@ pygame.display.set_caption("MIDI-MCSTRUCTURE NEXT  GUI")
 try:
     pygame.display.set_icon(pygame.image.load("Asset/image/icon.ico"))
 except:
-    global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+    if global_info["setting"]["log_level"] >= 2:
+        global_info["log"].extend(("[W] " + line for line in traceback.format_exc().splitlines()))
 
 window = pygame.display.set_mode(global_info["display_size"])
 
@@ -1371,8 +1388,9 @@ try:
 
     threading.Thread(target=asset_load).start()
 
-    while True:
+    while not global_info["exit"]:
         window.fill((0, 0, 0, 255))
+
         env_list = {}
         for env in pygame.event.get():
             if env.type == pygame.QUIT:
@@ -1387,15 +1405,16 @@ try:
                     env_list["mouse_left"] = False
                 if env.button == 3:
                     env_list["mouse_right"] = False
-        if global_info["exit"]:
-            break
+
         global_info["animation_speed"] = timer.get_fps()
         if 0 < global_info["setting"]["animation_speed"] < global_info["animation_speed"]:
             global_info["animation_speed"] = global_info["setting"]["animation_speed"] / global_info["animation_speed"]
         else:
             global_info["animation_speed"] = 1
+
         if overlay_page:
             render_page(window, overlay_page, env_list)
+
         pygame.display.flip()
         timer.tick(global_info["setting"]["fps"])
 except KeyboardInterrupt:
@@ -1405,7 +1424,7 @@ except:
     global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 finally:
     if global_info["log"] and global_info["setting"]["log_level"]:
-        with open("log.txt", "a") as io:
+        with open("log.txt", "a", encoding="utf-8") as io:
             io.write("[" + ("V" + str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
             io.writelines("  " + line + "\n" for line in global_info["log"])
 
@@ -1418,7 +1437,7 @@ finally:
     if global_info["exit"] == 2:
         subprocess.Popen("Updater/updater.exe")
     elif global_info["exit"] == 3:
-        window.blit(pygame.transform.scale(global_asset["error"], (800, 450)), (0, 0))
+        window.blit(global_asset["error"], (0, 0))
         pygame.display.flip()
         time.sleep(3)
 
