@@ -550,7 +550,10 @@ def cmd_convertor(_setting: dict, _profile: dict, _result: list, _task_id: int, 
 
                 if _data not in _data_pool:
                     _data_pool[_data] = []
-                _data_pool[_data].append(_k - _time_offset)
+
+                time_object = _k - _time_offset
+                if time_object not in _data_pool[_data]:
+                    _data_pool[_data].append(time_object)
 
         for _data in _data_pool:
             _selector = ""
@@ -560,7 +563,7 @@ def cmd_convertor(_setting: dict, _profile: dict, _result: list, _task_id: int, 
             if _list_length == 1:
                 _selector = _profile["command"]["timer_target_selector"]["regular"].replace("{VALUE}", str(_time_list[0]))
             else:
-                _str_length = len(_profile["command"]["timer_target_selector"]["compressed"][0])
+                _str_length = len(_profile["command"]["timer_target_selector"]["compressed"][2])
                 for _i in range(_list_length + 1):
                     if _i > 0:
                         _start_time = _time_list[_i - 1] + 1
