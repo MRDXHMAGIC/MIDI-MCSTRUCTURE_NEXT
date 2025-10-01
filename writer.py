@@ -36,7 +36,10 @@ try:
                     elif command[0] == "music_name":
                         music_name = command[1]
                     elif command[0] == "structure_id":
-                        structure_id = int(command[1])
+                        if command[1] != "None":
+                            structure_id = int(command[1])
+                        else:
+                            structure_id = 0
                     elif command[0] == "length_of_time":
                         length_of_time = int(command[1])
                     elif command[0] == "structure_path":
@@ -120,5 +123,5 @@ except:
 finally:
     if log:
         with open("log.txt", "a") as io:
-            io.write("[V250718A] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
+            io.write("[V251001R] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
             io.writelines("  " + line + "\n" for line in log)
