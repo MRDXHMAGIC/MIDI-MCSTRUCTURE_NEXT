@@ -15,8 +15,10 @@ import webbrowser
 from tkinter import filedialog
 
 # 加载资源函数
-def asset_load():
+def asset_load() -> None:
     try:
+        _start_time = time.time()
+
         if os.path.exists("Asset/text/setting.json"):
             with open("Asset/text/setting.json", "rb") as _io:
                 _buffer = json.loads(_io.read())
@@ -25,13 +27,12 @@ def asset_load():
         elif global_info["setting"]["log_level"] >= 2:
             global_info["log"].append("[W] setting.json is Not Existing!")
 
-        if global_info["setting"]["id"] <= 0:
-            global_info["setting"]["id"] = 1
-
-        global_asset["loading"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading.png"), global_info["display_size"]).convert_alpha()
+        global_asset["loading_mask"] = pygame.image.load("Asset/image/loading_mask.png").convert_alpha()
+        global_asset["blur"] = pygame.image.load("Asset/image/blur_background.png").convert_alpha()
+        global_asset["logo"] = pygame.image.load("Asset/image/logo.png").convert_alpha()
         add_page(overlay_page, [loading_screen, {}], 1)
 
-        global_asset["error"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/error_background.png"), global_info["display_size"]).convert_alpha()
+        global_asset["error"] = pygame.image.load("Asset/image/error_background.png").convert_alpha()
 
         if os.path.isdir("Cache/extracted/Updater"):
             _n = 0
@@ -48,10 +49,29 @@ def asset_load():
         pygame.font.init()
         global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", 28)
         global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/menu_background.png"), global_info["display_size"]).convert_alpha()
-        global_asset["blur"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/blur_background.png"), global_info["display_size"]).convert_alpha()
-        global_asset["config"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/config_background.png"), (760, 40)).convert_alpha()
-        global_asset["logo"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/logo.png"), (560, 64)).convert_alpha()
-        global_asset["message_mask"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/mask.png"), (800, 40)).convert_alpha()
+        global_asset["config"] = pygame.image.load("Asset/image/config_background.png").convert_alpha()
+        global_asset["message_mask"] = pygame.transform.scale(pygame.image.load("Asset/image/mask.png"), (800, 40)).convert_alpha()
+
+        if os.path.exists("Cache/image/keyboard_background.png"):
+            global_asset["kb_background"] = pygame.image.load("Cache/image/keyboard_background.png").convert_alpha()
+        else:
+            if not os.path.exists("Cache/image"):
+                os.makedirs("Cache/image")
+
+            _keyboard_mask = pygame.image.load("Asset/image/keyboard_mask.png").convert_alpha()
+            global_asset["kb_background"] = global_asset["menu"].copy()
+
+            _kb_mask_size = _keyboard_mask.get_size()
+
+            for _x in range(_kb_mask_size[0]):
+                for _y in range(_kb_mask_size[1]):
+                    _color = _keyboard_mask.get_at((_x, _y))
+                    if sum((_value * _color[3]) ** 2 for _value in _color[:3]) != 0:
+                        global_asset["kb_background"].set_at((_x, _y), global_asset["blur"].get_at((_x, _y)))
+
+            global_asset["kb_background"].blit(_keyboard_mask, (0, 0))
+
+            pygame.image.save(global_asset["kb_background"], "Cache/image/keyboard_background.png")
 
         global_asset["structure"] = []
         for _n in os.listdir("Asset/mcstructure"):
@@ -74,7 +94,8 @@ def asset_load():
 
         threading.Thread(target=get_version_list).start()
 
-        time.sleep(1)
+        while time.time() - _start_time < 1:
+            time.sleep(0.1)
 
         global_info["message"].append("小提示：使用鼠标左右键来进入或返回页面！")
 
@@ -529,8 +550,36 @@ def cmd_convertor(_setting: dict, _profile: dict, _result: list, _task_id: int, 
         raise ValueError("Unknown Command Type: " + str(_setting["command_type"]))
 
     _cmd_list = []
-    if _setting["compression"]:
-        _data_pool = {}
+    if _setting["command_type"] == 0:
+        _last_time = _time_offset
+        for _k in sorted(list(_result)):
+            for _n, _i in enumerate(_result[_k]):
+                if _i["type"] == "note":
+                    _cmd = _raw_cmd.replace(
+                        "{SOUND}", _i["program"]).replace(
+                        "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting["panning"] else "~ ~ ~")).replace(
+                        "{VOLUME}", str(_i["velocity"])).replace(
+                        "{PITCH}", str(_i["pitch"])).replace(
+                        "{TIME}", str(_k - _time_offset)).replace(
+                        "{TTS}", _profile["command"]["timer_target_selector"]["regular"].replace("{VALUE}", str(_k - _time_offset))).replace(
+                        "{ADDRESS}", str(_task_id))
+                elif _i["type"] == "lyrics":
+                    _cmd = _profile["command"]["lyrics"][_setting["command_type"]].replace(
+                        "{LAST}", _i["last"]).replace(
+                        "{REAL_F}", _i["real_f"]).replace(
+                        "{REAL_S}", _i["real_s"]).replace(
+                        "{NEXT}", _i["next"]).replace(
+                        "{TIME}", str(_k - _time_offset)).replace(
+                        "{TTS}", _profile["command"]["timer_target_selector"]["regular"].replace("{VALUE}", str(_k - _time_offset))).replace(
+                        "{ADDRESS}", str(_task_id))
+                else:
+                    raise TypeError("Unknown Data Type: " + str(_i["type"]))
+                if _delay_info:
+                    _cmd_list.append("# tick_delay=" + str(_k - _last_time))
+                _cmd_list.append(_cmd[1:] if _cmd[0] == "/" else _cmd)
+                _last_time = _k
+    else:
+        _data_buffer = {}
         for _k in sorted(list(_result)):
             for _n, _i in enumerate(_result[_k]):
                 if _i["type"] == "note":
@@ -548,12 +597,29 @@ def cmd_convertor(_setting: dict, _profile: dict, _result: list, _task_id: int, 
                 else:
                     raise TypeError("Unknown Data Type: " + str(_i["type"]))
 
-                if _data not in _data_pool:
-                    _data_pool[_data] = []
+                if _data not in _data_buffer:
+                    _data_buffer[_data] = []
 
-                time_object = _k - _time_offset
-                if time_object not in _data_pool[_data]:
-                    _data_pool[_data].append(time_object)
+                _time_object = _k - _time_offset
+                if _time_object not in _data_buffer[_data]:
+                    _data_buffer[_data].append(_time_object)
+
+        _data_pool = {}
+        for _k in _data_buffer:
+            _data_num = 0
+            _label_id = 0
+            for _i in _data_buffer[_k]:
+                if _data_num >= _setting["compression"]:
+                    _label_id += 1
+                    _data_num = 0
+
+                _key = _k + tuple([_label_id])
+
+                if _key not in _data_pool:
+                    _data_pool[_key] = []
+
+                _data_pool[_key].append(_i)
+                _data_num += 1
 
         for _data in _data_pool:
             _selector = ""
@@ -618,35 +684,6 @@ def cmd_convertor(_setting: dict, _profile: dict, _result: list, _task_id: int, 
                 raise TypeError("Unknown Data Type: " + str(_data[0]))
 
             _cmd_list.append(_cmd[1:] if _cmd[0] == "/" else _cmd)
-    else:
-        _last_time = _time_offset
-        for _k in sorted(list(_result)):
-            for _n, _i in enumerate(_result[_k]):
-                if _i["type"] == "note":
-                    _cmd = _raw_cmd.replace(
-                        "{SOUND}", _i["program"]).replace(
-                        "{POSITION}", ("^" + str(_i["pan"][0]) + " ^ ^" + str(_i["pan"][1]) if _setting[
-                            "panning"] else "~ ~ ~")).replace(
-                        "{VOLUME}", str(_i["velocity"])).replace(
-                        "{PITCH}", str(_i["pitch"])).replace(
-                        "{TIME}", str(_k - _time_offset)).replace(
-                        "{TTS}", _profile["command"]["timer_target_selector"]["regular"].replace("{VALUE}", str(_k - _time_offset))).replace(
-                        "{ADDRESS}", str(_task_id))
-                elif _i["type"] == "lyrics":
-                    _cmd = _profile["command"]["lyrics"][_setting["command_type"]].replace(
-                        "{LAST}", _i["last"]).replace(
-                        "{REAL_F}", _i["real_f"]).replace(
-                        "{REAL_S}", _i["real_s"]).replace(
-                        "{NEXT}", _i["next"]).replace(
-                        "{TIME}", str(_k - _time_offset)).replace(
-                        "{TTS}", _profile["command"]["timer_target_selector"]["regular"].replace("{VALUE}", str(_k - _time_offset))).replace(
-                        "{ADDRESS}", str(_task_id))
-                else:
-                    raise TypeError("Unknown Data Type: " + str(_i["type"]))
-                if _delay_info:
-                    _cmd_list.append("# tick_delay=" + str(_k - _last_time))
-                _cmd_list.append(_cmd[1:] if _cmd[0] == "/" else _cmd)
-                _last_time = _k
 
     if _setting["command_type"] == 1:
         _raw_cmd = _profile["command"]["clock"][1:]
@@ -793,9 +830,8 @@ def convertor_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+    _root = global_asset["blur"].copy()
     _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
 
     mouse_position = pygame.mouse.get_pos()
 
@@ -876,13 +912,14 @@ def convertor_screen(_info, _input):
 
     return _root
 
-def loading_screen(_info, _input):
-    return global_asset["loading"].copy()
+def loading_screen(_info, _input) -> pygame.Surface:
+    _surf: pygame.Surface = global_asset["blur"].copy()
+    _surf.blits(((global_asset["loading_mask"], (0, 0)), (global_asset["logo"], (120, 193))))
+    return _surf
 
 def menu_screen(_info, _input):
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+    _root = global_asset["blur"].copy()
     _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
 
     mouse_position = pygame.mouse.get_pos()
 
@@ -904,16 +941,15 @@ def menu_screen(_info, _input):
     return _root
 
 def ask_software_setting():
-    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["重置结构ID", 0], ["界面刷新率 ", 0], ["动画速度 ", 0], ["日志等级 ", 0]]}])
+    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["单指令内时间数 ", 0], ["界面刷新率 ", 0], ["动画速度 ", 0], ["日志等级 ", 0]]}])
 
 def software_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         global_info["new_version"] = False
         remove_page(overlay_page)
 
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+    _root = global_asset["blur"].copy()
     _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
 
     mouse_position = pygame.mouse.get_pos()
 
@@ -926,8 +962,7 @@ def software_setting_screen(_info, _input):
                 if _n == 0:
                     show_version_list()
                 elif _n == 1:
-                    global_info["setting"]["id"] = 1
-                    global_info["message"].append("已重置结构ID！")
+                    set_selector_num()
                 elif _n == 2:
                     global_info["setting"]["fps"] += 30
                     if global_info["setting"]["fps"] > 120:
@@ -944,6 +979,8 @@ def software_setting_screen(_info, _input):
             _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         if _n == 0:
             _text += "（发现新版本）" if global_info["new_version"] else ""
+        if _n == 1:
+            _text += str(global_info["setting"]["max_selector_num"])
         elif _n == 2:
             _text += str(global_info["setting"]["fps"]) + "Hz" if global_info["setting"]["fps"] else "无限制"
         elif _n == 3:
@@ -963,6 +1000,15 @@ def software_setting_screen(_info, _input):
     _root.blit(_mask, (0, 0))
 
     return _root
+
+def set_selector_num(_num: None | int=None) -> None:
+    if _num is None:
+        global_info["message"].append("请输入最大选择器数！")
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_selector_num"], "callback": set_selector_num, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
+    else:
+        if _num is not None:
+            remove_page(overlay_page)
+            global_info["setting"]["max_selector_num"] = _num
 
 def show_version_list():
     add_page(overlay_page, [version_list_screen, {"index": 0, "state": [], "config": [["", 0], ["◀                                                                                                                    ", 0], ["                                                                                                                    ▶", 0], ["查看该版本详情", 0], ["下载并安装该版本", 0]]}])
@@ -1029,9 +1075,8 @@ def download_screen(_info, _input):
         remove_page(overlay_page)
         _info["time"] = -1
 
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+    _root = global_asset["blur"].copy()
     _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
 
     _y = 20
 
@@ -1071,9 +1116,8 @@ def about_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+    _root = global_asset["blur"].copy()
     _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
 
     mouse_position = pygame.mouse.get_pos()
 
@@ -1119,9 +1163,8 @@ def setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+    _root = global_asset["blur"].copy()
     _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
 
     mouse_position = pygame.mouse.get_pos()
 
@@ -1200,9 +1243,8 @@ def other_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+    _root = global_asset["blur"].copy()
     _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
 
     mouse_position = pygame.mouse.get_pos()
 
@@ -1303,9 +1345,8 @@ def game_edition_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = pygame.Surface(global_info["display_size"]).convert_alpha()
+    _root = global_asset["blur"].copy()
     _mask = global_asset["menu"].copy()
-    _root.blit(global_asset["blur"], (0, 0))
 
     mouse_position = pygame.mouse.get_pos()
 
@@ -1352,7 +1393,7 @@ def game_edition_screen(_info, _input):
 
     return _root
 
-def start_task():
+def start_task(_id: None | int=None) -> None:
     if not global_info["convertor"]["file"]:
         return
     if global_info["convertor"]["edition"] == -1:
@@ -1361,16 +1402,85 @@ def start_task():
         return
     if global_info["convertor"]["speed"] == -1:
         return
-    threading.Thread(target=convertor, args=(global_info["convertor"].copy(), global_info["setting"]["id"])).start()
-    if global_info["convertor"]["command_type"] == 2:
-        global_info["setting"]["id"] += 1
+
+    if global_info["convertor"]["command_type"] == 2 and _id is None:
+        global_info["message"].append("请输入编号！")
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["id"], "callback": start_task, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
+    else:
+        if _id is not None:
+            remove_page(overlay_page)
+            global_info["setting"]["id"] = _id
+
+        _argument = global_info["convertor"].copy()
+        _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
+        threading.Thread(target=convertor, args=(_argument, _id)).start()
+
+def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        remove_page(overlay_page)
+
+    _root = global_asset["kb_background"].copy()
+
+    mouse_position = pygame.mouse.get_pos()
+
+    _text_surface = global_asset["font"].render(str(_info["value"]), True, (255, 255, 255))
+    _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, 135 - _text_surface.get_size()[1] / 2))
+
+    for _n, _i in enumerate(_info["button"]):
+        _x = 20 + (_n % 4) * 190 + (20 if (_n + 1) % 4 == 0 else 0)
+        _y = 175 + (_n // 4) * 60
+        if _x < mouse_position[0] < _x + 170 and _y <= mouse_position[1] <= _y + 40:
+            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
+            if "mouse_left" in _input and not _input["mouse_left"]:
+                if _n == 0:
+                    _info["value"] *= 10
+                    _info["value"] += 1
+                elif _n == 1:
+                    _info["value"] *= 10
+                    _info["value"] += 2
+                elif _n == 2:
+                    _info["value"] *= 10
+                    _info["value"] += 3
+                elif _n == 3:
+                    _info["value"] *= 10
+                elif _n == 4:
+                    _info["value"] *= 10
+                    _info["value"] += 4
+                elif _n == 5:
+                    _info["value"] *= 10
+                    _info["value"] += 5
+                elif _n == 6:
+                    _info["value"] *= 10
+                    _info["value"] += 6
+                elif _n == 7:
+                    _info["value"] = 0
+                elif _n == 8:
+                    _info["value"] *= 10
+                    _info["value"] += 7
+                elif _n == 9:
+                    _info["value"] *= 10
+                    _info["value"] += 8
+                elif _n == 10:
+                    _info["value"] *= 10
+                    _info["value"] += 9
+                elif _n == 11:
+                    _info["callback"](_info["value"])
+
+                if _info["value"] > 2147483648:
+                    _info["value"] = 2147483648
+        else:
+            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
+        _text_surface = to_alpha(global_asset["font"].render(_i[0], True, (255, 255, 255)), (255, 255, 255, _i[1]))
+        _root.blit(_text_surface, (_x - _text_surface.get_size()[0] / 2 + 85, _y - _text_surface.get_size()[1] / 2 + 20))
+
+    return _root
 
 def processing_screen(_info, _input):
     return global_asset["blur"].copy()
 
-global_info = {"exit": 0, "log": [], "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": False, "compression": False}}
+global_info = {"exit": 0, "log": [], "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": False, "compression": False}}
 overlay_page = []
-global_asset = {}
+global_asset: dict[str, pygame.Surface | pygame.font.Font | list] = {}
 
 pygame.display.init()
 
