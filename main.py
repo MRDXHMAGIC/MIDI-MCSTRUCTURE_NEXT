@@ -28,7 +28,11 @@ def asset_load() -> None:
             global_info["log"].append("[W] setting.json is Not Existing!")
 
         global_asset["loading_mask"] = pygame.image.load("Asset/image/loading_mask.png").convert_alpha()
-        global_asset["blur"] = pygame.image.load("Asset/image/blur_background.png").convert_alpha()
+        if os.path.exists("Cache/image/blur.png"):
+            global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
+        else:
+            _surf = pygame.Surface(global_info["display_size"]).convert_alpha()
+            global_asset["blur"] = _surf
         global_asset["logo"] = pygame.image.load("Asset/image/logo.png").convert_alpha()
         add_page(overlay_page, [loading_screen, {}], 1)
 
@@ -48,16 +52,25 @@ def asset_load() -> None:
 
         pygame.font.init()
         global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", 28)
-        global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/menu_background.png"), global_info["display_size"]).convert_alpha()
+        if os.path.exists("Asset/image/custom_menu_background.png"):
+            global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/custom_menu_background.png"), global_info["display_size"]).convert_alpha()
+        else:
+            global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/default_menu_background.png"), global_info["display_size"]).convert_alpha()
         global_asset["config"] = pygame.image.load("Asset/image/config_background.png").convert_alpha()
         global_asset["message_mask"] = pygame.transform.scale(pygame.image.load("Asset/image/mask.png"), (800, 40)).convert_alpha()
+
+        if not os.path.exists("Cache/image"):
+            os.makedirs("Cache/image")
+
+        if os.path.exists("Cache/image/blur.png"):
+            global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
+        else:
+            blur_picture(global_asset["menu"], global_asset["blur"])
+            pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
 
         if os.path.exists("Cache/image/keyboard_background.png"):
             global_asset["kb_background"] = pygame.image.load("Cache/image/keyboard_background.png").convert_alpha()
         else:
-            if not os.path.exists("Cache/image"):
-                os.makedirs("Cache/image")
-
             _keyboard_mask = pygame.image.load("Asset/image/keyboard_mask.png").convert_alpha()
             global_asset["kb_background"] = global_asset["menu"].copy()
 
@@ -94,8 +107,9 @@ def asset_load() -> None:
 
         threading.Thread(target=get_version_list).start()
 
-        while time.time() - _start_time < 1:
-            time.sleep(0.1)
+        while time.time() - _start_time < 0.5:
+            time.sleep(0.01)
+        time.sleep(0.5)
 
         global_info["message"].append("小提示：使用鼠标左右键来进入或返回页面！")
 
@@ -103,6 +117,39 @@ def asset_load() -> None:
     except:
         global_info["exit"] = 3
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+
+def blur_picture(_surf: pygame.Surface, _result: pygame.Surface, _kernel_size: int=9, _sigma: float=2.5) -> pygame.Surface:
+    _kernel = []
+    _kernel_sum = 0
+
+    if _kernel_size % 2 == 0:
+        _kernel_size += 1
+
+    _radius = _kernel_size // 2
+
+    for _x in range(_radius * -1, _radius + 1):
+        _buffer = []
+        for _y in range(_radius * -1, _radius + 1):
+            _value = 1 / (2 * 3.1415926 * _sigma ** 2) * 2.7182818 ** (-(_x ** 2 + _y ** 2) / (2 * _sigma ** 2))
+            _buffer.append(_value)
+            _kernel_sum += _value
+        _kernel.append(_buffer)
+
+    for _line in _kernel:
+        for _i in range(len(_line)):
+            _line[_i] /= _kernel_sum
+
+    _surf_size = _surf.get_size()
+
+    for _x in range(_surf_size[0]):
+        for _y in range(_surf_size[1]):
+            _color = (0, 0, 0)
+            for _kx in range(_kernel_size):
+                if 0 < _x + _kx - _radius < _surf_size[0]:
+                    for _ky in range(_kernel_size):
+                        if 0 < _y + _ky - _radius < _surf_size[1]:
+                            _color = tuple(_origin + _new * _kernel[_kx][_ky] for _origin, _new in zip(_color, _surf.get_at((_x + _kx - _radius, _y + _ky - _radius))))
+            _result.set_at((_x, _y), _color)
 
 def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
     _sound_list = {}
@@ -913,7 +960,7 @@ def convertor_screen(_info, _input):
     return _root
 
 def loading_screen(_info, _input) -> pygame.Surface:
-    _surf: pygame.Surface = global_asset["blur"].copy()
+    _surf = global_asset["blur"].copy()
     _surf.blits(((global_asset["loading_mask"], (0, 0)), (global_asset["logo"], (120, 193))))
     return _surf
 
@@ -941,7 +988,7 @@ def menu_screen(_info, _input):
     return _root
 
 def ask_software_setting():
-    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["单指令内时间数 ", 0], ["界面刷新率 ", 0], ["动画速度 ", 0], ["日志等级 ", 0]]}])
+    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["单指令内时间数 ", 0], ["界面刷新率 ", 0], ["动画速度 ", 0], ["日志等级 ", 0], ["自定义背景", 0]]}])
 
 def software_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
@@ -975,6 +1022,9 @@ def software_setting_screen(_info, _input):
                     global_info["setting"]["log_level"] += 1
                     if global_info["setting"]["log_level"] == 3:
                         global_info["setting"]["log_level"] = 0
+                elif _n == 5:
+                    if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("PNG Files", ".png"), ("JPEG Files", ".jpg"), ("JPEG Files", ".jpeg")]):
+                        threading.Thread(target=process_background, args=[_path]).start()
         else:
             _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         if _n == 0:
@@ -1000,6 +1050,15 @@ def software_setting_screen(_info, _input):
     _root.blit(_mask, (0, 0))
 
     return _root
+
+def process_background(_path):
+    try:
+        pygame.image.save(pygame.transform.smoothscale(pygame.image.load(_path), global_info["display_size"]), "Asset/image/custom_menu_background.png")
+        shutil.rmtree("Cache/image")
+        global_info["message"].append("已成功设置背景，重启软件生效！")
+    except:
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+        global_info["message"].append("无法加载图片文件！")
 
 def set_selector_num(_num: None | int=None) -> None:
     if _num is None:
