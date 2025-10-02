@@ -1,87 +1,127 @@
-import os
 import time
-import json
-import py7zr
-import shutil
+import pynbt
 import traceback
-import subprocess
+
+def list_position(_size, _position):
+    _n = _position[2]
+    _n += _position[1] * _size[2]
+    _n += _position[0] * (_size[1] * _size[2])
+    return _n
+
+def check(_size, _position):
+    if _position[0] >= _size[0] or _position[0] < 0:
+        return False
+    elif _position[1] >= size[1] or _position[1] < 0:
+        return False
+    elif _position[2] >= size[2] or _position[2] < 0:
+        return False
+    else:
+        return True
 
 log = []
-last_time = 0
-root = os.path.abspath("").replace("\\", "/") + "/"
 
 try:
-    log.append("[N] Load Old Settings")
-    with open(root + "Asset/text/setting.json", "r") as io:
-        old_setting = json.load(io)
+    delay = 0
+    music_name = ""
+    structure_id = 0
+    length_of_time = 0
 
-    log.append("[I] MMS-NEXT V" + str(old_setting["version"]))
-    log.append("[N] Position: " + root)
+    with open("Cache/convertor/raw_command.txt", "r", encoding="utf-8") as io:
+        for command in io.read().splitlines():
+            if command[:2] == "# ":
+                command = command[2:].split("=", 1)
+                if len(command) == 2:
+                    if command[0] == "tick_delay":
+                        delay = int(command[1])
+                    elif command[0] == "music_name":
+                        music_name = command[1]
+                    elif command[0] == "structure_id":
+                        if command[1] != "None":
+                            structure_id = int(command[1])
+                        else:
+                            structure_id = 0
+                    elif command[0] == "length_of_time":
+                        length_of_time = int(command[1])
+                    elif command[0] == "structure_path":
+                        structure = pynbt.NBTFile(open(command[1], "rb"), little_endian=True)
+                        position = [0, 0, 0]
+                        size = (structure["size"][0].value, structure["size"][1].value, structure["size"][2].value)
 
-    if os.path.exists(root + "Cache/extracted"):
-        log.append("[W] Remove Directory: Cache/extracted")
-        shutil.rmtree(root + "Cache/extracted")
-    log.append("[N] Make Directory: Cache/extracted")
-    os.makedirs(root + "Cache/extracted")
+                        for n in structure["structure"]["palette"]["default"]["block_position_data"]:
+                            i = structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]
+                            if i["CustomName"].value == "start":
+                                position = [i["x"].value - structure["structure_world_origin"][0].value,
+                                            i["y"].value - structure["structure_world_origin"][1].value,
+                                            i["z"].value - structure["structure_world_origin"][2].value]
+                            elif i["CustomName"].value == "append":
+                                i["Command"] = pynbt.TAG_String(i["Command"].value.replace("__ADDRESS__", str(structure_id)).replace("__TOTAL__", str(length_of_time)).replace("__NAME__", music_name))
+                            i["CustomName"] = pynbt.TAG_String("")
 
-    log.append("[N] Extract Package")
-    with py7zr.SevenZipFile(root + "Cache/download/package.7z", "r") as io:
-        io.extractall(root + "Cache/extracted")
-
-    log.append("[N] Load New Settings")
-    with open(root + "Cache/extracted/Asset/text/setting.json", "r") as io:
-        new_setting = json.load(io)
-    log.append("[N] Copy Settings:")
-    for k in list(old_setting.keys()):
-        if k in new_setting and k not in ("version", "edition"):
-            log.append("[N]   " + str(k) + ": " + str(old_setting[k]) + " -> " + str(new_setting[k]))
-            new_setting[k] = old_setting[k]
-    log.append("[N] Save Settings")
-    with open(root + "Cache/extracted/Asset/text/setting.json", "w") as io:
-        json.dump(new_setting, io)
-
-    if os.path.exists(root + "Cache/extracted/Asset/mcstructure") and os.path.exists(root + "Asset/mcstructure"):
-        log.append("[N] Move Structures:")
-        for i in os.listdir(root + "Asset/mcstructure"):
-            if os.path.splitext(i)[1] == ".mcstructure":
-                log.append("[N]     Find: " + i)
-                if not os.path.exists(root + "Cache/extracted/Asset/mcstructure/" + i):
-                    log.append("[N]     Move: " + i)
-                    shutil.move(root + "Asset/mcstructure/" + i, root + "Cache/extracted/Asset/mcstructure/" + i)
-
-
-    log.append("[N] Install Update:")
-    for i in os.listdir(root):
-        if i not in ("Updater", "Cache"):
-            log.append("[N]   Try to Remove: " + i)
-            n = 0
-            while n <= 16:
-                try:
-                    if os.path.isdir(root + i):
-                        shutil.rmtree(root + i)
-                    elif os.path.isfile(root + i):
-                        os.remove(root + i)
+                        n = 0
+                        air_palette = -1
+                        for n, i in enumerate(structure["structure"]["palette"]["default"]["block_palette"]):
+                            if i["name"].value == "minecraft:air":
+                                air_palette = n
+                                break
+                        if air_palette == -1:
+                            air_palette = n + 1
+                            structure["structure"]["palette"]["default"]["block_palette"].append(
+                                pynbt.TAG_Compound({
+                                    "name": pynbt.TAG_String("minecraft:air"),
+                                    "states": pynbt.TAG_Compound(),
+                                    "val": pynbt.TAG_Short(0),
+                                    "version": pynbt.TAG_Int(18090528)
+                                })
+                            )
+            else:
+                n = str(list_position(size, position))
+                if structure["structure"]["palette"]["default"]["block_position_data"].get(n) and check(size, position):
+                    structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["Command"] = pynbt.TAG_String(command)
+                    structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["TickDelay"] = pynbt.TAG_Int(delay)
+                    direct = structure["structure"]["palette"]["default"]["block_palette"][structure["structure"]["block_indices"][0][list_position(size, position)].value]["states"]["facing_direction"].value
+                    if direct == 0:
+                        position[1] -= 1
+                    elif direct == 1:
+                        position[1] += 1
+                    elif direct == 2:
+                        position[2] -= 1
+                    elif direct == 3:
+                        position[2] += 1
+                    elif direct == 4:
+                        position[0] -= 1
+                    elif direct == 5:
+                        position[0] += 1
+                else:
                     break
-                except:
-                    n += 1
 
-    for i in os.listdir(root + "Cache/extracted"):
-        log.append("[N]   Try to Move: " + i)
-        if os.path.splitext(i)[1] == ".exe":
-            shutil.move(root + "Cache/extracted/" + i, root + "MIDI-MCSTRUCTURE_NEXT.exe")
-        elif os.path.isdir(root + "Cache/extracted/" + i) and i != "Updater":
-            shutil.move(root + "Cache/extracted/" + i, root + i)
+    while True:
+        n = str(list_position(size, position))
+        direct = structure["structure"]["palette"]["default"]["block_palette"][structure["structure"]["block_indices"][0][list_position(size, position)].value]["states"]["facing_direction"].value
+        if direct == 0:
+            position[1] -= 1
+        elif direct == 1:
+            position[1] += 1
+        elif direct == 2:
+            position[2] -= 1
+        elif direct == 3:
+            position[2] += 1
+        elif direct == 4:
+            position[0] -= 1
+        elif direct == 5:
+            position[0] += 1
+        if structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["Command"].value == "":
+            del structure["structure"]["palette"]["default"]["block_position_data"][n]
+            structure["structure"]["block_indices"][0][int(n)] = pynbt.TAG_Int(air_palette)
+            structure["structure"]["block_indices"][1][int(n)] = pynbt.TAG_Int(-1)
+        if not check(size, position):
+            break
 
-    log.append("[I] Update Successfully:")
-    log.append("[I]   V" + str(old_setting["version"]) + " -> V" + str(new_setting["version"]))
+    with open("Cache/convertor/structure.mcstructure", "wb") as io:
+        structure.save(io, little_endian=True)
 except:
     log.extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 finally:
     if log:
         with open("log.txt", "a") as io:
-            io.write("[V250720R] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
+            io.write("[V251001R] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
             io.writelines("  " + line + "\n" for line in log)
-
-    subprocess.Popen(root + "MIDI-MCSTRUCTURE_NEXT.exe")
-
-    os._exit(0)
