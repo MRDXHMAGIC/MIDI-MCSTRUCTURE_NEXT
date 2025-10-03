@@ -30,11 +30,12 @@ def asset_load() -> None:
         global_asset["loading_mask"] = pygame.image.load("Asset/image/loading_mask.png").convert_alpha()
         if os.path.exists("Cache/image/blur.png"):
             global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
+            _progress = None
         else:
-            _surf = pygame.Surface(global_info["display_size"]).convert_alpha()
-            global_asset["blur"] = _surf
+            global_asset["blur"] = pygame.Surface(global_info["display_size"]).convert_alpha()
+            _progress = [0]
         global_asset["logo"] = pygame.image.load("Asset/image/logo.png").convert_alpha()
-        add_page(overlay_page, [loading_screen, {}], 1)
+        add_page(overlay_page, [loading_screen, {"progress": _progress, "alpha": 0}], 1)
 
         global_asset["error"] = pygame.image.load("Asset/image/error_background.png").convert_alpha()
 
@@ -48,7 +49,7 @@ def asset_load() -> None:
                 except:
                     _n += 1
             shutil.copytree("Cache/extracted/Updater", "Updater")
-            shutil.rmtree("Cache")
+            shutil.rmtree("Cache/extracted")
 
         pygame.font.init()
         global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", 28)
@@ -62,10 +63,10 @@ def asset_load() -> None:
         if not os.path.exists("Cache/image"):
             os.makedirs("Cache/image")
 
-        if os.path.exists("Cache/image/blur.png"):
+        if _progress is None:
             global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
         else:
-            blur_picture(global_asset["menu"], global_asset["blur"])
+            global_asset["blur"] = blur_picture(global_asset["menu"], _progress)
             pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
 
         if os.path.exists("Cache/image/keyboard_background.png"):
@@ -105,7 +106,7 @@ def asset_load() -> None:
         for _k in ("new_bedrock", "old_bedrock", "new_java", "old_java"):
             global_asset["profile"][_k]["sound_list"] = translate_mapping_profile(_mapping, global_asset["profile"][_k]["sound_list"])
 
-        threading.Thread(target=get_version_list).start()
+        # threading.Thread(target=get_version_list).start()
 
         while time.time() - _start_time < 0.5:
             time.sleep(0.01)
@@ -118,7 +119,7 @@ def asset_load() -> None:
         global_info["exit"] = 3
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
-def blur_picture(_surf: pygame.Surface, _result: pygame.Surface, _kernel_size: int=9, _sigma: float=2.5) -> pygame.Surface:
+def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=5, _sigma: float=3) -> pygame.Surface:
     _kernel = []
     _kernel_sum = 0
 
@@ -140,8 +141,10 @@ def blur_picture(_surf: pygame.Surface, _result: pygame.Surface, _kernel_size: i
             _line[_i] /= _kernel_sum
 
     _surf_size = _surf.get_size()
+    _result = pygame.Surface(_surf_size).convert_alpha()
 
     for _x in range(_surf_size[0]):
+        _progress[0] = _x
         for _y in range(_surf_size[1]):
             _color = (0, 0, 0)
             for _kx in range(_kernel_size):
@@ -150,6 +153,8 @@ def blur_picture(_surf: pygame.Surface, _result: pygame.Surface, _kernel_size: i
                         if 0 < _y + _ky - _radius < _surf_size[1]:
                             _color = tuple(_origin + _new * _kernel[_kx][_ky] for _origin, _new in zip(_color, _surf.get_at((_x + _kx - _radius, _y + _ky - _radius))))
             _result.set_at((_x, _y), _color)
+
+    return _result
 
 def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
     _sound_list = {}
@@ -961,6 +966,12 @@ def convertor_screen(_info, _input):
 
 def loading_screen(_info, _input) -> pygame.Surface:
     _surf = global_asset["blur"].copy()
+    if _info["progress"] is not None:
+        pygame.draw.rect(_surf, (255, 255, 255), (200, 330, 400, 24), 2)
+        pygame.draw.rect(_surf, (255, 255, 255), (204, 334, round_45(392 * (_info["progress"][0] + 1) / global_info["display_size"][0]), 16), 0)
+        if _info["progress"][0] + 1 == global_info["display_size"][0]:
+            _info["alpha"] += (255 - _info["alpha"]) * global_info["animation_speed"]
+            _surf = to_alpha(_surf, (255, 255, 255, round_45(_info["alpha"])))
     _surf.blits(((global_asset["loading_mask"], (0, 0)), (global_asset["logo"], (120, 193))))
     return _surf
 
@@ -1062,7 +1073,7 @@ def process_background(_path):
 
 def set_selector_num(_num: None | int=None) -> None:
     if _num is None:
-        global_info["message"].append("请输入最大选择器数！")
+        global_info["message"].append("请输入最多压缩到单条指令内的时间项数！")
         add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_selector_num"], "callback": set_selector_num, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
     else:
         if _num is not None:
