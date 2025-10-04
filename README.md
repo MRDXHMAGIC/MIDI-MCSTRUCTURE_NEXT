@@ -11,6 +11,7 @@ MIDI音乐转为mcstructure或mcfunction。
 
 ### 编辑指令
 指令使用JSON格式存储在程序运行目录/Asset/text/profile.json中，可使用Windows自带的记事本或其他文本编辑器来编辑。
+
 如果一切顺利，你应当看到以下的文件结构：
 
 ```
@@ -53,4 +54,48 @@ MIDI音乐转为mcstructure或mcfunction。
 {VOLUME}代表音量（范围0.0 ~ 1）；  
 {PITCH}代表音调（会根据游戏版本自动限制）；  
 {TIME}在追加指令中指时间全长，单位为一个游戏刻；  
-另外，歌词字幕中{LAST}指上一条歌词，{REAL}指当前歌词，{NEXT}指下一条歌词。  
+{TTS}在普通模式下为timer_target_selector中regular中的内容，压缩模式下为timer_target_selector中compressed中的内容，{VALUE}指时间。  
+另外，歌词字幕中{LAST}指上一条歌词；{REAL_F}指当前歌词中已经唱到的部分，{REAL_S}指当前歌词中还未唱到的部分；{NEXT}指下一条歌词。
+
+### 音色映射
+MIDI映射表使用JSON格式存储在程序运行目录/Asset/text/mapping.json中，可使用Windows自带的记事本或其他文本编辑器来编辑。
+
+格式如下：
+
+```
+{
+  "undefined": "harp",
+  "default": "harp",
+  "0": "harp",
+  "124": "telephone_ring"
+  "percussion": {
+    "undefined": "cymbal",
+    "31": "hat"
+  }
+}
+```
+undefined指无法在映射表中找到定义所使用的乐器，default指通道初始乐器；percussion指打击乐器，undefined同上，没有default；其余的为定义某个MIDI乐器，键为文本形式的乐器ID。  
+ **值得注意的是，每个键的值并不是对应游戏中的乐器ID，而是对应在profile.json中各个游戏版本中sound_list中的键，若无法在sound_list中找到，则再使用映射表中的undfined去sound_list寻找。**
+
+### 复合音色
+在上文提到的sound_list中， 每个MIDI乐器都可以对应不止一个游戏音效，格式如下：
+
+```
+"sound_list": {
+  "harp": [
+    ["note.harp", 0.53, 1.0, 0]
+  ],
+  "telephone_ring": [
+    ["note.bit", 2.0, 1.0, 0],
+    ["note.bit", 2.0, 0.5, 50],
+    ["note.bit", 2.0, 1.0, 50],
+    ["note.bit", 2.0, 0.5, 50],
+    ["note.bit", 2.0, 1.0, 50],
+    ["note.bit", 2.0, 0.5, 50],
+    ["note.bit", 2.0, 1.0, 50],
+    ["note.bit", 2.0, 0.5, 50]
+  ]
+}
+```
+每个键都对应一个列表（当禁用该乐器时需将列表替换为"disable"），列表内又有若干个列表（也就是一个MIDI乐器可以对应多个音效）。  
+列表中，元素依次为游戏音效ID、音量倍率、音调倍率、相对延迟时间（指距离上个音效的时间，单位为ms）。
