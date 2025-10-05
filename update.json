@@ -1,5 +1,11 @@
  [
   {
+    "API": 1,
+    "hash": "75b62f8523b167e64b0b97fb2ba99244",
+    "version": 10251005,
+    "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V10251005-Alpha/ProfileEditor.7z"
+  },
+  {
     "API": 0,
     "hash": "137b6fe68b113d3e5cd4188583ad0183",
     "version": 10250716,
