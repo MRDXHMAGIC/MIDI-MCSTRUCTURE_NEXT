@@ -1,9 +1,9 @@
  [
   {
     "API": 1,
-    "hash": "f19cf5b961b5090ddf4ededc63261ea9",
-    "version": 10251005,
-    "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V10251005-Alpha/ProfileEditor.7z"
+    "hash": "d8b32ddc711941e94c6ebd3ba13e099f",
+    "version": 10251006,
+    "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V10251006-Beta/ProfileEditor.7z"
   },
   {
     "API": 0,
@@ -129,7 +129,7 @@
     "API": 0,
     "hash": "4f1999f2077bc5b56e9ed75c9370ba16",
     "version": 14251005,
-    "edition": "Alpha",
+    "edition": "Preview",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V14251005-Alpha/MIDI-MCSTRUCTURE_NEXT_V14251005-Alpha.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251005-Alpha"
   },
@@ -140,5 +140,13 @@
     "edition": "Alpha",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V14251006-Alpha/MIDI-MCSTRUCTURE_NEXT_V14251006-Alpha.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251006-Alpha"
+  },
+  {
+    "API": 0,
+    "hash": "9eeaaa72b99026c3ed116120ef4fe112",
+    "version": 14251007,
+    "edition": "Beta",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V14251007-Beta/MIDI-MCSTRUCTURE_NEXT_V14251007-Beta.7z",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251007-Beta"
   }
  ]
