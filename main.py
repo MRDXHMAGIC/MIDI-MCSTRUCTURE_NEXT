@@ -3,6 +3,7 @@ import math
 import json
 import time
 import mido
+import py7zr
 import shutil
 import random
 import pygame
@@ -24,7 +25,7 @@ def asset_load() -> None:
                 _buffer = json.loads(_io.read())
                 for _k in _buffer:
                     global_info["setting"][_k] = _buffer[_k]
-        elif global_info["setting"]["log_level"] >= 2:
+        else:
             global_info["log"].append("[W] setting.json is Not Existing!")
 
         global_asset["loading_mask"] = pygame.image.load("Asset/image/loading_mask.png").convert_alpha()
@@ -94,19 +95,12 @@ def asset_load() -> None:
                     global_asset["structure"].insert(0, _n)
                 else:
                     global_asset["structure"].append(_n)
-        if global_info["setting"]["log_level"] >= 2 and not global_asset["structure"]:
+        if not global_asset["structure"]:
             global_info["log"].append("[W] No Structure File!")
 
-        with open("Asset/text/mapping.json", "rb") as _io:
-            _mapping = json.loads(_io.read())
+        load_profile()
 
-        with open("Asset/text/profile.json", "rb") as _io:
-            global_asset["profile"] = json.loads(_io.read())
-
-        for _k in ("new_bedrock", "old_bedrock", "new_java", "old_java"):
-            global_asset["profile"][_k]["sound_list"] = translate_mapping_profile(_mapping, global_asset["profile"][_k]["sound_list"])
-
-        # threading.Thread(target=get_version_list).start()
+        threading.Thread(target=get_version_list).start()
 
         while time.time() - _start_time < 0.5:
             time.sleep(0.01)
@@ -119,7 +113,7 @@ def asset_load() -> None:
         global_info["exit"] = 3
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
-def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=5, _sigma: float=3) -> pygame.Surface:
+def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=7, _sigma: float=2) -> pygame.Surface:
     _kernel = []
     _kernel_sum = 0
 
@@ -131,7 +125,7 @@ def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=
     for _x in range(_radius * -1, _radius + 1):
         _buffer = []
         for _y in range(_radius * -1, _radius + 1):
-            _value = 1 / (2 * 3.1415926 * _sigma ** 2) * 2.7182818 ** (-(_x ** 2 + _y ** 2) / (2 * _sigma ** 2))
+            _value = 1 / (2 * math.pi * _sigma ** 2) * math.exp(-(_x ** 2 + _y ** 2) / (2 * _sigma ** 2))
             _buffer.append(_value)
             _kernel_sum += _value
         _kernel.append(_buffer)
@@ -155,6 +149,16 @@ def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=
             _result.set_at((_x, _y), _color)
 
     return _result
+
+def load_profile():
+    with open("Asset/text/mapping.json", "rb") as _io:
+        _mapping = json.loads(_io.read())
+
+    with open("Asset/text/profile.json", "rb") as _io:
+        global_asset["profile"] = json.loads(_io.read())
+
+    for _k in ("new_bedrock", "old_bedrock", "new_java", "old_java"):
+        global_asset["profile"][_k]["sound_list"] = translate_mapping_profile(_mapping, global_asset["profile"][_k]["sound_list"])
 
 def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
     _sound_list = {}
@@ -182,8 +186,7 @@ def convertor(_setting, _task_id):
                 _midi_file = mido.MidiFile(_setting["file"], charset=_charset, clip=True)
                 break
             except:
-                if global_info["setting"]["log_level"] >= 2:
-                    global_info["log"].append("[W] " + _charset + " Can't Decode \"" + os.path.basename(_setting["file"]) + "\"!")
+                global_info["log"].append("[W] " + _charset + " Can't Decode \"" + os.path.basename(_setting["file"]) + "\"!")
 
         # 根据设置的游戏版本选择合适的配置文件
         if global_info["convertor"]["edition"] == 0:
@@ -222,8 +225,9 @@ def convertor(_setting, _task_id):
                 if hasattr(_message, "channel"):
                     if _message.channel not in _info_list:
                         _info_list[_message.channel] = {
-                            "program": [(0, _profile["sound_list"]["default"]), (float("INF"), 0)],
-                            "volume": [(0, 1), (float("INF"), 0)], "pan": [(0, [0, 0]), (float("INF"), [0, 0])]}
+                            "program": [(0, _profile["sound_list"]["default"]), (float("INF"), "")],
+                            "volume": [(0, 1), (float("INF"), 1)],
+                            "pan": [(0, [0, 0]), (float("INF"), [0, 0])]}
 
                 # 获取tempo信息，并按时间顺序添加到列表中
                 if _message.type == "set_tempo":
@@ -280,7 +284,7 @@ def convertor(_setting, _task_id):
 
                 if _message.type == "lyrics":
                     # 将音符时间转为游戏tick时间并根据速度设置调整
-                    _tick_time = int(round_45(time_convertor(_time, _tempo_list, _midi_file.ticks_per_beat) / _setting["speed"]))
+                    _tick_time = int(round_45(time_convertor(_time, _tempo_list, _midi_file.ticks_per_beat, _setting["time_per_tick"])))
 
                     # 判断歌词缓存中是否有改时间，如果没有就创建该时间
                     if _tick_time not in _lyrics_buffer:
@@ -340,16 +344,17 @@ def convertor(_setting, _task_id):
                     _velocity *= _volume
 
                     # 将音符时间转为游戏tick时间并根据速度设置调整
-                    _tick_time = int(round_45(time_convertor(_time, _tempo_list, _midi_file.ticks_per_beat) / _setting["speed"]))
+                    _base_time = time_convertor(_time, _tempo_list, _midi_file.ticks_per_beat, _setting["time_per_tick"])
 
                     # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
+                    _delay_time = 0
                     for _n, _note in enumerate(_program):
                         # 如果禁用单音符对应多个我的世界乐器的功能，仅循环一次就退出
                         if _n > 0 and not _setting["adjustment"]:
                             break
 
                         # 累加配置文件中我的世界乐器之间的时间间隔
-                        _tick_time += _note[3]
+                        _delay_time += _note[3]
 
                         _note_pitch = _pitch
                         _note_velocity = _velocity
@@ -374,12 +379,14 @@ def convertor(_setting, _task_id):
                             _average_volume[0] += 1
                             _average_volume[1] += _note_velocity
 
+                        _key_time = int(round_45(_base_time + _delay_time / _setting["time_per_tick"]))
+
                         # 判断音符缓存中是否有改时间，如果没有就创建该时间
-                        if _tick_time not in _note_buffer:
-                            _note_buffer[_tick_time] = []
+                        if _key_time not in _note_buffer:
+                            _note_buffer[_key_time] = []
 
                         # 向该时间中添加音符数据
-                        _note_buffer[_tick_time].append({"program": _note[0], "pitch": _note_pitch, "velocity": _note_velocity, "pan": _pan})
+                        _note_buffer[_key_time].append({"program": _note[0], "pitch": _note_pitch, "velocity": _note_velocity, "pan": _pan})
 
         # 调整音量，用于控制平均音量功能
         if _average_volume[0]:
@@ -397,77 +404,107 @@ def convertor(_setting, _task_id):
 
         # 歌词数据处理
         if _setting["lyrics"]:
-            # 计算平均间隔时间
-            _last_time = 0
-            _average_delay_time = [0, 0]
-            for _k in sorted(list(_lyrics_buffer)):
-                _average_delay_time[1] += _k - _last_time
-                _average_delay_time[0] += 1
-                _last_time = _k
+            if os.path.exists(os.path.splitext(_setting["file"])[0] + ".lrc"):
+                global_info["log"].append("[I] Find LRC File")
 
-            if _average_delay_time[0]:
-                _average_delay_time = _average_delay_time[1] / _average_delay_time[0]
+                for _charset in ("utf-8", "ANSI"):
+                    try:
+                        with open(os.path.splitext(_setting["file"])[0] + ".lrc", "r", encoding=_charset) as _io:
+                            _lyrics_buffer = load_lrc(_io.read().splitlines(), _setting["time_per_tick"])
+                        break
+                    except:
+                        global_info["log"].append("[W] " + _charset + " Can't Decode LRC File!")
 
-                # 根据间隔时间断句
+                _time_list = sorted(list(_lyrics_buffer))
+                _time_list_length = len(_time_list)
+                for _i in range(_time_list_length):
+                    if _i > 0:
+                        _last_lyrics = _lyrics_buffer[_time_list[_i - 1]]
+                    else:
+                        _last_lyrics = ""
+
+                    _text_f = _lyrics_buffer[_time_list[_i]]
+
+                    if _i < _time_list_length - 1:
+                        _next_lyrics = _lyrics_buffer[_time_list[_i + 1]]
+                    else:
+                        _next_lyrics = ""
+
+                    if _time_list[_i] not in _result:
+                        _result[_time_list[_i]] = []
+                    _result[_time_list[_i]].append({"type": "lyrics", "last": _last_lyrics, "real_f": _text_f, "real_s": "", "next": _next_lyrics})
+            else:
+                # 计算平均间隔时间
                 _last_time = 0
-                _head_sign = True
-                _lyrics_text = []
-                _lyrics_list = []
-                _lyrics_length = 0
+                _average_delay_time = [0, 0]
                 for _k in sorted(list(_lyrics_buffer)):
-                    for _i in _lyrics_buffer[_k]:
-                        if _lyrics_length > 20 or (_average_delay_time <= _k - _last_time and not _head_sign):
-                            _lyrics_list.append(_lyrics_text)
-                            _lyrics_length = 0
-                            _lyrics_text = []
-                        _lyrics_text.append(_i["text"])
-
-                        for _char in _i["text"]:
-                            if _char in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()[]{},.!?;:'\"~+-*/":
-                                _lyrics_length += 0.5
-                            else:
-                                _lyrics_length += 1
+                    _average_delay_time[1] += _k - _last_time
+                    _average_delay_time[0] += 1
                     _last_time = _k
-                    _head_sign = False
-                if _lyrics_text:
-                    _lyrics_list.append(_lyrics_text)
 
-                # 渲染歌词字幕
-                _lyrics_mask = 0
-                for _k in sorted(list(_lyrics_buffer)):
-                    _lyrics_progress = 0
-                    _lyrics_mask += len(_lyrics_buffer[_k])
-                    for _i in range(len(_lyrics_list)):
-                        if _lyrics_mask - _lyrics_progress <= len(_lyrics_list[_i]):
-                            _text_f = ""
-                            _text_s = ""
-                            for _n, _t in enumerate(_lyrics_list[_i]):
-                                if _lyrics_mask - _lyrics_progress == _n:
+                if _average_delay_time[0]:
+                    _average_delay_time = _average_delay_time[1] / _average_delay_time[0]
+
+                    # 根据间隔时间断句
+                    _last_time = 0
+                    _head_sign = True
+                    _lyrics_text = []
+                    _lyrics_list = []
+                    _lyrics_length = 0
+                    for _k in sorted(list(_lyrics_buffer)):
+                        for _i in _lyrics_buffer[_k]:
+                            if _lyrics_length > 20 or (_average_delay_time <= _k - _last_time and not _head_sign):
+                                _lyrics_list.append(_lyrics_text)
+                                _lyrics_length = 0
+                                _lyrics_text = []
+                            _lyrics_text.append(_i["text"])
+
+                            for _char in _i["text"]:
+                                if _char in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()[]{},.!?;:'\"~+-*/":
+                                    _lyrics_length += 0.5
+                                else:
+                                    _lyrics_length += 1
+                        _last_time = _k
+                        _head_sign = False
+                    if _lyrics_text:
+                        _lyrics_list.append(_lyrics_text)
+
+                    # 渲染歌词字幕
+                    _lyrics_mask = 0
+                    for _k in sorted(list(_lyrics_buffer)):
+                        _lyrics_progress = 0
+                        _lyrics_mask += len(_lyrics_buffer[_k])
+                        for _i in range(len(_lyrics_list)):
+                            if _lyrics_mask - _lyrics_progress <= len(_lyrics_list[_i]):
+                                _text_f = ""
+                                _text_s = ""
+                                for _n, _t in enumerate(_lyrics_list[_i]):
+                                    if _lyrics_mask - _lyrics_progress == _n:
+                                        _text_f = _text_s
+                                        _text_s = ""
+                                    _text_s += _t
+
+                                if not _text_f:
                                     _text_f = _text_s
                                     _text_s = ""
-                                _text_s += _t
 
-                            if not _text_f:
-                                _text_f = _text_s
-                                _text_s = ""
+                                _last_lyrics = ""
+                                if _i - 1 >= 0:
+                                    for _t in _lyrics_list[_i - 1]:
+                                        _last_lyrics += _t
 
-                            _last_lyrics = ""
-                            if _i - 1 >= 0:
-                                for _t in _lyrics_list[_i - 1]:
-                                    _last_lyrics += _t
+                                _next_lyrics = ""
+                                if _i + 1 < len(_lyrics_list):
+                                    for _t in _lyrics_list[_i + 1]:
+                                        _next_lyrics += _t
 
-                            _next_lyrics = ""
-                            if _i + 1 < len(_lyrics_list):
-                                for _t in _lyrics_list[_i + 1]:
-                                    _next_lyrics += _t
+                                # 将歌词数据合并到结果中
+                                if _k not in _result:
+                                    _result[_k] = []
+                                _result[_k].append({"type": "lyrics", "last": _last_lyrics, "real_f": _text_f, "real_s": _text_s, "next": _next_lyrics})
+                                break
 
-                            # 将歌词数据合并到结果中
-                            if _k not in _result:
-                                _result[_k] = []
-                            _result[_k].append({"type": "lyrics", "last": _last_lyrics, "real_f": _text_f, "real_s": _text_s, "next": _next_lyrics})
-                            break
-
-                        _lyrics_progress += len(_lyrics_list[_i])
+                            _lyrics_progress += len(_lyrics_list[_i])
 
         # 将音符数据合并到结果中
         for _k in _note_buffer:
@@ -477,7 +514,8 @@ def convertor(_setting, _task_id):
                 if _k not in _result:
                     _result[_k] = []
 
-                _result[_k].append(_i)
+                if _i not in _result[_k]:
+                    _result[_k].append(_i)
 
         # 获取最早的数据的时间，用于跳过静音功能
         if _setting["skip"]:
@@ -505,10 +543,10 @@ def convertor(_setting, _task_id):
             subprocess.Popen("Writer/writer.exe").wait()
 
             if not os.path.exists("Cache/convertor/structure.mcstructure"):
-                return
+                raise IOError("structure.mcstructure Not in Cache!")
 
             if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
-                                                          initialfile=_music_name,
+                                                          initialfile=_music_name + "-" + uuid(6).upper(),
                                                           filetypes=[("Structure Files", ".mcstructure")],
                                                           defaultextension=".mcstructure"):
                 if os.path.exists(_save_path):
@@ -516,7 +554,8 @@ def convertor(_setting, _task_id):
                 shutil.copyfile("Cache/convertor/structure.mcstructure", _save_path)
         elif _setting["output_format"] == 1:
             if _setting["command_type"] == 0:
-                return
+                raise ValueError("Unsupported Command Type!")
+
             with open("Cache/convertor/function.mcfunction", "w", encoding="utf-8") as _io:
                 for _cmd in cmd_convertor(_setting, _profile, _result, _task_id, _time_offset, False):
                     _io.write(_cmd + "\n")
@@ -528,10 +567,8 @@ def convertor(_setting, _task_id):
                     _manifest_file = json.loads(_io.read())
 
                 _manifest_file["header"]["name"] = _music_name
-                _manifest_file["header"]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(
-                    12)
-                _manifest_file["modules"][0]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(
-                    4) + "-" + uuid(12)
+                _manifest_file["header"]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(12)
+                _manifest_file["modules"][0]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(12)
 
                 _behavior_file = [
                     {"pack_id": _manifest_file["header"]["uuid"], "version": _manifest_file["header"]["version"]}]
@@ -579,21 +616,21 @@ def convertor(_setting, _task_id):
     finally:
         remove_page(overlay_page)
 
-def time_convertor(_time: int, _tempo_list: list, _ticks_per_beat: int) -> float:
+def time_convertor(_time: int, _tempo_list: list, _ticks_per_beat: int, _time_per_tick: int=50) -> float:
     _tick_time = 0
 
     for _n in range(1, len(_tempo_list)):
         if _tempo_list[_n][0] <= _time:
-            _tick_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 2000
+            _tick_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 1000
         else:
-            _tick_time += mido.tick2second(_time - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 2000
+            _tick_time += mido.tick2second(_time - _tempo_list[_n - 1][0], _ticks_per_beat, _tempo_list[_n - 1][1]) * 1000
             break
 
-    return _tick_time
+    return _tick_time / _time_per_tick
 
 def cmd_convertor(_setting: dict, _profile: dict, _result: list, _task_id: int, _time_offset: int, _delay_info: bool) -> list[str]:
     if _setting["command_type"] == 0:
-        _raw_cmd = _profile["command"]["delay"]
+        _raw_cmd = _profile["command"]["delay"][0]
     elif _setting["command_type"] == 1:
         _raw_cmd = _profile["command"]["clock"][0]
     elif _setting["command_type"] == 2:
@@ -737,20 +774,63 @@ def cmd_convertor(_setting: dict, _profile: dict, _result: list, _task_id: int, 
 
             _cmd_list.append(_cmd[1:] if _cmd[0] == "/" else _cmd)
 
-    if _setting["command_type"] == 1:
+    if _setting["command_type"] == 0:
+        _raw_cmd = _profile["command"]["delay"][1:]
+    elif _setting["command_type"] == 1:
         _raw_cmd = _profile["command"]["clock"][1:]
     elif _setting["command_type"] == 2:
         _raw_cmd = _profile["command"]["address"][1:]
     else:
         _raw_cmd = []
 
-    for _i in _raw_cmd:
-        _cmd = _i.replace(
-            "{TIME}", str(max(list(_result)))).replace(
-            "{ADDRESS}", str(_task_id))
-        _cmd_list.append(_cmd[1:] if _cmd[0] == "/" else _cmd)
+    if _raw_cmd:
+        if _delay_info:
+            _cmd_list.append("# tick_delay=0")
+
+        for _i in _raw_cmd:
+            _cmd = _i.replace(
+                "{TIME}", str(max(list(_result)))).replace(
+                "{ADDRESS}", str(_task_id))
+            _cmd_list.append(_cmd[1:] if _cmd[0] == "/" else _cmd)
 
     return _cmd_list
+
+def load_lrc(_str: list[str], _time_per_tick: int=50) -> dict[int, str]:
+    _offset = 0
+    _buffer = {}
+    for _line in _str:
+        if _length := len(_line):
+            _tags = []
+            _start = None
+            _argument = ""
+            for _i in range(_length):
+                if _line[_i] == "[" and _start is None:
+                    _start = _i
+                elif _line[_i] == "]" and _start is not None:
+                    _tags.append(_line[_start + 1:_i])
+                    _start = None
+                elif _start is None:
+                    _argument = _line[_i:]
+                    break
+
+            for _tag in _tags:
+                _tag_type, _value = _tag.split(":", 1)
+                if is_number(_tag_type):
+                    _time = (float(_tag_type) * 60 + float(_value)) * 1000
+                    if _time not in _buffer:
+                        _buffer[_time] = ""
+                    _buffer[_time] += _argument
+
+                elif _tag_type == "offset":
+                    _offset = int(_value)
+
+    _result = {}
+    for _i in _buffer:
+        _tick_time = int(round_45((_i - _offset) / _time_per_tick))
+        if _tick_time >= 0:
+            _result[_tick_time] = _buffer[_i]
+
+    return _result
 
 # 页面渲染函数
 def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
@@ -812,6 +892,25 @@ def uuid(_n: int) -> str:
         _n -= 1
     return _uuid
 
+def is_number(_str: str) -> bool:
+    _length = len(_str)
+    return all(_str[_i] in "0123456789" or (_str[_i] == "." and 1 < _i + 1 < _length) for _i in range(_length)) and _str.count(".") <= 1
+
+def watchdog():
+    while True:
+        if global_info["watch_dog"] >= 10:
+            global_info["log"].extend(("[E] Run Timed Out of 1000ms Exceeded!", "[I] Process is Killed by Watchdog!"))
+            save_log()
+            os._exit(0)
+        global_info["watch_dog"] += 1
+        time.sleep(0.1)
+
+def save_log():
+    if global_info["log"] and global_info["setting"]["log_level"]:
+        with open("log.txt", "a", encoding="utf-8") as _io:
+            _io.write("[" + ("V" + str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
+            _io.writelines("  " + _line + "\n" for _line in filter(lambda _text: not ((_text[:3] == "[W]" and global_info["setting"]["log_level"] < 2) or (_text[:3] == "[I]" and global_info["setting"]["log_level"] < 3)), global_info["log"]))
+
 # GUI页面管理函数
 def add_page(_overlay, _page, _position=0, _back=True):
     _overlay.append(_page + [_position, True, _back])
@@ -832,6 +931,8 @@ def get_version_list():
         for _i in _update_log:
             if _i["API"] == 0:
                 global_info["update_list"].append(_i)
+            if _i["API"] == 1:
+                global_info["editor_update"] = _i
 
         _length = len(global_info["update_list"])
 
@@ -844,11 +945,12 @@ def get_version_list():
     except:
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
-def download(_url, _state, _target_hash="", _file_name="package.7z"):
+def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=True):
     try:
         _state["state"] = 0
 
         if os.path.exists("Cache/download"):
+            global_info["log"].append("[W] Cache/download Will be Removed!")
             shutil.rmtree("Cache/download")
         os.makedirs("Cache/download")
 
@@ -867,12 +969,23 @@ def download(_url, _state, _target_hash="", _file_name="package.7z"):
 
         if _target_hash and _target_hash != str(_real_hash.hexdigest()):
             raise IOError("Broken Package, Please Try Again.")
+
+        _state["state"] = 1
+
+        if os.path.exists("Cache/extracted"):
+            global_info["log"].append("[W] Cache/extracted Will be Removed!")
+            shutil.rmtree("Cache/extracted")
+        os.makedirs("Cache/extracted")
+
+        global_info["log"].append("[I] Extract " + _file_name)
+        with py7zr.SevenZipFile("Cache/download/" + _file_name, "r") as _io:
+            _io.extractall("Cache/extracted")
     except:
         _state["state"] = -1
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
     finally:
         if _state["state"] != -1:
-            _state["state"] = 1
+            _state["state"] = 2
 
 # 各种回调函数（用于GUI）
 def start_to_game():
@@ -898,7 +1011,7 @@ def convertor_screen(_info, _input):
                     _text = "请选择游戏版本"
                 elif global_info["convertor"]["output_format"] == -1:
                     _text = "请完成常用设置"
-                elif global_info["convertor"]["speed"] == -1:
+                elif global_info["convertor"]["time_per_tick"] == -1:
                     _text = "请完成其他设置"
             _i[1] += (255 - _i[1]) * global_info["animation_speed"]
             if "mouse_left" in _input and not _input["mouse_left"]:
@@ -940,11 +1053,8 @@ def convertor_screen(_info, _input):
                 _text += "/" + str(global_info["convertor"]["volume"]) + "%"
             if global_asset["structure"] and global_info["convertor"]["output_format"] == 0:
                 _text += "/" + os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0]
-        elif _n == 3 and global_info["convertor"]["speed"] != -1:
-            _text = str(global_info["convertor"]["speed"] / 100)
-            if global_info["convertor"]["speed"] % 10 == 0:
-                _text += "0"
-            _text += "倍"
+        elif _n == 3 and global_info["convertor"]["time_per_tick"] != -1:
+            _text = str(global_info["convertor"]["time_per_tick"]) + "ms"
             if global_info["convertor"]["panning"]:
                 _text += "/声相偏移"
             if global_info["convertor"]["skip"]:
@@ -999,7 +1109,7 @@ def menu_screen(_info, _input):
     return _root
 
 def ask_software_setting():
-    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["单指令内时间数 ", 0], ["界面刷新率 ", 0], ["动画速度 ", 0], ["日志等级 ", 0], ["自定义背景", 0]]}])
+    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["单指令内时间数 ", 0], ["界面刷新率 ", 0], ["动画速度 ", 0], ["日志等级 ", 0], ["自定义背景", 0], ["MMS指令编辑器", 0]]}])
 
 def software_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
@@ -1031,11 +1141,12 @@ def software_setting_screen(_info, _input):
                         global_info["setting"]["animation_speed"] = 0
                 elif _n == 4:
                     global_info["setting"]["log_level"] += 1
-                    if global_info["setting"]["log_level"] == 3:
+                    if global_info["setting"]["log_level"] >= 4:
                         global_info["setting"]["log_level"] = 0
                 elif _n == 5:
-                    if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("PNG Files", ".png"), ("JPEG Files", ".jpg"), ("JPEG Files", ".jpeg")]):
-                        threading.Thread(target=process_background, args=[_path]).start()
+                    threading.Thread(target=process_background).start()
+                elif _n == 6:
+                    threading.Thread(target=enter_to_editor).start()
         else:
             _i[1] += (127 - _i[1]) * global_info["animation_speed"]
         if _n == 0:
@@ -1053,6 +1164,8 @@ def software_setting_screen(_info, _input):
                 _text += "错误"
             elif global_info["setting"]["log_level"] == 2:
                 _text += "警告"
+            elif global_info["setting"]["log_level"] == 3:
+                _text += "信息"
         _root.blit(global_asset["config"], (20, _y))
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[1]))
@@ -1062,11 +1175,12 @@ def software_setting_screen(_info, _input):
 
     return _root
 
-def process_background(_path):
+def process_background():
     try:
-        pygame.image.save(pygame.transform.smoothscale(pygame.image.load(_path), global_info["display_size"]), "Asset/image/custom_menu_background.png")
-        shutil.rmtree("Cache/image")
-        global_info["message"].append("已成功设置背景，重启软件生效！")
+        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")]):
+            pygame.image.save(pygame.transform.smoothscale(pygame.image.load(_path), global_info["display_size"]), "Asset/image/custom_menu_background.png")
+            shutil.rmtree("Cache/image")
+            global_info["message"].append("已成功设置背景，重启软件生效！")
     except:
         global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
         global_info["message"].append("无法加载图片文件！")
@@ -1074,7 +1188,7 @@ def process_background(_path):
 def set_selector_num(_num: None | int=None) -> None:
     if _num is None:
         global_info["message"].append("请输入最多压缩到单条指令内的时间项数！")
-        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_selector_num"], "callback": set_selector_num, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_selector_num"], "text": "", "callback": set_selector_num, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
     else:
         if _num is not None:
             remove_page(overlay_page)
@@ -1113,7 +1227,13 @@ def version_list_screen(_info, _input):
                     elif _n == 3 and global_info["update_list"][_info["index"]]["description_url"]:
                         webbrowser.open(global_info["update_list"][_info["index"]]["description_url"])
                     elif _n == 4:
-                        show_download(global_info["update_list"][_info["index"]])
+                        _info = global_info["update_list"][_info["index"]]
+                        show_download(
+                            ("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_info["version"]),
+                            _info["download_url"],
+                            _info["hash"],
+                            reboot_to_update
+                        )
             else:
                 _i[1] += (127 - _i[1]) * global_info["animation_speed"]
             if _n == 0:
@@ -1133,10 +1253,10 @@ def version_list_screen(_info, _input):
 
     return _root
 
-def show_download(_info):
+def show_download(_title: str, _url: str, _hash: str, _callback=lambda: remove_page(overlay_page)):
     _state = {"state": 0, "downloaded": 0, "total": 0}
-    threading.Thread(target=download, args=(_info["download_url"], _state, _info["hash"])).start()
-    add_page(overlay_page, [download_screen, {"state": _state, "version": _info["version"], "time": 0}])
+    threading.Thread(target=download, args=(_url, _state, _hash)).start()
+    add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "time": 0, "done": False, "callback": _callback}])
 
 def download_screen(_info, _input):
     if _info["state"]["state"] == -1 and _info["time"] != -1:
@@ -1152,13 +1272,17 @@ def download_screen(_info, _input):
 
     for _n in range(2):
         if _n == 0:
-            _text = ("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_info["version"])
+            _text = _info["title"]
         else:
             if _info["state"]["state"] == 0:
                 _text = str(round_45((_info["state"]["downloaded"] / _info["state"]["total"]) * 100, 2)) + "%" if _info["state"]["total"] else "等待中"
             elif _info["state"]["state"] == 1:
-                _text = "下载完成"
-                global_info["exit"] = 2
+                _text = "正在解压"
+            elif _info["state"]["state"] == 2:
+                _text = "解压完成"
+                if not _info["done"]:
+                    _info["callback"]()
+                    _info["done"] = True
             elif _info["state"]["state"] == -1:
                 _text = "下载失败，请重试"
             else:
@@ -1172,6 +1296,55 @@ def download_screen(_info, _input):
     _root.blit(_mask, (0, 0))
 
     return _root
+
+def reboot_to_update():
+    global_info["exit"] = 2
+
+def start_install_editor():
+    remove_page(overlay_page)
+    threading.Thread(target=install_editor).start()
+
+def install_editor():
+    try:
+        if os.path.exists("Editor"):
+            global_info["log"].append("[W] \"Editor\" Directory Will be Removed!")
+            shutil.rmtree("Editor")
+        shutil.move("Cache/extracted", "Editor")
+        enter_to_editor()
+    except:
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+
+def enter_to_editor():
+    add_page(overlay_page, [processing_screen, {}])
+    _remove = True
+    try:
+        _installed = False
+        if not os.path.exists("Editor"):
+            _installed = True
+        elif os.path.exists("Editor/metadata.json"):
+            with open("Editor/metadata.json", "rb") as _io:
+                _meta_data = json.loads(_io.read())
+            _installed = global_info["editor_update"] and _meta_data["version"] < global_info["editor_update"]["version"]
+        else:
+            _installed = True
+
+        if _installed:
+            if global_info["editor_update"]:
+                _remove = False
+                remove_page(overlay_page)
+                show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], global_info["editor_update"]["hash"], start_install_editor)
+            else:
+                global_info["message"].append("无法获取编辑器版本信息，请稍后再试！")
+        else:
+            subprocess.Popen("Editor/ProfileEditor.exe").wait()
+            load_profile()
+            global_info["message"].append("已重新加载配置文件！")
+    except:
+        global_info["message"].append("无法启动编辑器，请重试！")
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+    finally:
+        if _remove:
+            remove_page(overlay_page)
 
 def show_about():
     if global_info["setting"]["version"]:
@@ -1221,8 +1394,18 @@ def about_screen(_info, _input):
     return _root
 
 def ask_file():
-    if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("MIDI Files", ".mid")]):
-        global_info["convertor"]["file"] = _path
+    threading.Thread(target=open_filedialog).start()
+
+def open_filedialog():
+    try:
+        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("MIDI Files", ".mid")]):
+            global_info["convertor"]["file"] = _path
+            if os.path.exists(os.path.splitext(_path)[0] + ".lrc"):
+                global_info["message"].append("检测到同名的.lrc文件，启用歌词显示即可加载歌词！")
+            else:
+                global_info["message"].append("未检测到同名的.lrc文件，若启用歌词显示将尝试从MIDI中获取")
+    except:
+        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
 def ask_setting():
     if global_info["convertor"]["output_format"] == -1:
@@ -1305,8 +1488,8 @@ def setting_screen(_info, _input):
     return _root
 
 def ask_other_setting():
-    if global_info["convertor"]["speed"] == -1:
-        global_info["convertor"]["speed"] = 100
+    if global_info["convertor"]["time_per_tick"] == -1:
+        global_info["convertor"]["time_per_tick"] = 50
     add_page(overlay_page, [other_setting_screen, {"config": [["播放速度 ", 0], ["声相偏移 ", 0], ["静音跳过 ", 0], ["打击乐器 ", 0], ["乐器调整 ", 0], ["歌词显示 ", 0], ["指令压缩  ", 0]]}])
 
 def other_setting_screen(_info, _input):
@@ -1324,9 +1507,7 @@ def other_setting_screen(_info, _input):
             _i[1] += (255 - _i[1]) * global_info["animation_speed"]
             if "mouse_left" in _input and not _input["mouse_left"]:
                 if _n == 0:
-                    global_info["convertor"]["speed"] += 5
-                    if global_info["convertor"]["speed"] >= 130:
-                        global_info["convertor"]["speed"] = 75
+                    set_time_per_tick()
                 elif _n == 1:
                     if global_info["convertor"]["panning"]:
                         global_info["convertor"]["panning"] = False
@@ -1363,10 +1544,7 @@ def other_setting_screen(_info, _input):
         _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
         _text = _i[0]
         if _n == 0:
-            _text += str(global_info["convertor"]["speed"] / 100)
-            if global_info["convertor"]["speed"] % 10 == 0:
-                _text += "0"
-            _text += "倍"
+            _text += str(global_info["convertor"]["time_per_tick"]) + "ms/tick"
         elif _n == 1:
             if global_info["convertor"]["panning"]:
                 _text += "启用"
@@ -1405,6 +1583,15 @@ def other_setting_screen(_info, _input):
     _root.blit(_mask, (0, 0))
 
     return _root
+
+def set_time_per_tick(_time: None | int=None) -> None:
+    if _time is None:
+        global_info["message"].append("请输入每游戏刻的时间！")
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["convertor"]["time_per_tick"], "text": "ms/tick", "callback": set_time_per_tick, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
+    else:
+        if _time is not None:
+            remove_page(overlay_page)
+            global_info["convertor"]["time_per_tick"] = _time
 
 def ask_edition():
     if global_info["convertor"]["edition"] == -1:
@@ -1470,12 +1657,12 @@ def start_task(_id: None | int=None) -> None:
         return
     if global_info["convertor"]["output_format"] == -1:
         return
-    if global_info["convertor"]["speed"] == -1:
+    if global_info["convertor"]["time_per_tick"] == -1:
         return
 
     if global_info["convertor"]["command_type"] == 2 and _id is None:
         global_info["message"].append("请输入编号！")
-        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["id"], "callback": start_task, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["id"], "text": "", "callback": start_task, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
     else:
         if _id is not None:
             remove_page(overlay_page)
@@ -1493,7 +1680,7 @@ def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
 
     mouse_position = pygame.mouse.get_pos()
 
-    _text_surface = global_asset["font"].render(str(_info["value"]), True, (255, 255, 255))
+    _text_surface = global_asset["font"].render(str(_info["value"]) + _info["text"], True, (255, 255, 255))
     _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, 135 - _text_surface.get_size()[1] / 2))
 
     for _n, _i in enumerate(_info["button"]):
@@ -1548,7 +1735,7 @@ def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
 def processing_screen(_info, _input):
     return global_asset["blur"].copy()
 
-global_info = {"exit": 0, "log": [], "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "speed": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": False, "compression": False}}
+global_info = {"exit": 0, "watch_dog": 0, "log": [], "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "editor_update": {}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": False, "compression": False}}
 overlay_page = []
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list] = {}
 
@@ -1561,8 +1748,7 @@ pygame.display.set_caption("MIDI-MCSTRUCTURE NEXT  GUI")
 try:
     pygame.display.set_icon(pygame.image.load("Asset/image/icon.ico"))
 except:
-    if global_info["setting"]["log_level"] >= 2:
-        global_info["log"].extend(("[W] " + line for line in traceback.format_exc().splitlines()))
+    global_info["log"].extend(("[W] " + line for line in traceback.format_exc().splitlines()))
 
 window = pygame.display.set_mode(global_info["display_size"])
 
@@ -1570,6 +1756,8 @@ try:
     timer = pygame.time.Clock()
 
     threading.Thread(target=asset_load).start()
+
+    threading.Thread(target=watchdog).start()
 
     while not global_info["exit"]:
         window.fill((0, 0, 0, 255))
@@ -1598,6 +1786,8 @@ try:
         if overlay_page:
             render_page(window, overlay_page, env_list)
 
+        global_info["watch_dog"] = 0
+
         pygame.display.flip()
         timer.tick(global_info["setting"]["fps"])
 except KeyboardInterrupt:
@@ -1606,10 +1796,7 @@ except:
     global_info["exit"] = 3
     global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 finally:
-    if global_info["log"] and global_info["setting"]["log_level"]:
-        with open("log.txt", "a", encoding="utf-8") as io:
-            io.write("[" + ("V" + str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
-            io.writelines("  " + line + "\n" for line in global_info["log"])
+    save_log()
 
     if not os.path.exists("Asset/text"):
         os.makedirs("Asset/text")
