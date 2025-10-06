@@ -98,7 +98,13 @@ def asset_load() -> None:
         if not global_asset["structure"]:
             global_info["log"].append("[W] No Structure File!")
 
-        load_profile()
+        _message = "小提示：使用鼠标左右键来进入或返回页面！"
+        try:
+            load_profile()
+        except:
+            _message = "无法加载配置文件，已加载备用的配置文件！"
+            load_profile("Asset/text/default_profile.json")
+            global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
         threading.Thread(target=get_version_list).start()
 
@@ -106,7 +112,7 @@ def asset_load() -> None:
             time.sleep(0.01)
         time.sleep(0.5)
 
-        global_info["message"].append("小提示：使用鼠标左右键来进入或返回页面！")
+        global_info["message"].append(_message)
 
         add_page(overlay_page, [menu_screen, {"config": [["转换文件", 0, start_to_game], ["设置", 0, ask_software_setting], ["关于MIDI-MCSTRUCTURE", 0, show_about]]}], 0, False)
     except:
@@ -150,11 +156,11 @@ def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=
 
     return _result
 
-def load_profile():
+def load_profile(_path="Asset/text/profile.json"):
     with open("Asset/text/mapping.json", "rb") as _io:
         _mapping = json.loads(_io.read())
 
-    with open("Asset/text/profile.json", "rb") as _io:
+    with open(_path, "rb") as _io:
         global_asset["profile"] = json.loads(_io.read())
 
     for _k in ("new_bedrock", "old_bedrock", "new_java", "old_java"):
