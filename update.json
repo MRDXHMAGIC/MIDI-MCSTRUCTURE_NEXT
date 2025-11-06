@@ -158,7 +158,7 @@
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251008-RC"
   },
   {
-    "API": 0,
+    "API": -1,
     "hash": "a42bc09ce49415f1909bfcdcf958dbfb",
     "version": 15251101,
     "edition": "Preview",
