@@ -801,7 +801,7 @@ def start_task(_id: None | int = None) -> None:
         global_info["message"].append("请输入编号！")
         add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["id"], "text": "", "callback": start_task, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
     else:
-        global_info["setting"]["id"] = _id
+        if _id is not None: global_info["setting"]["id"] = _id
         _argument = global_info["convertor"].copy()
         _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
         threading.Thread(target=convertor, args=(_argument, _id)).start()
