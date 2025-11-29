@@ -5,5 +5,6 @@ build/
 .venv/
 .idea/
 dist/
+uv.lock
 log.txt
 *.spec
