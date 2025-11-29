@@ -158,11 +158,19 @@
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251008-RC"
   },
   {
-    "API": -1,
+    "API": 0,
     "hash": "a42bc09ce49415f1909bfcdcf958dbfb",
     "version": 15251101,
     "edition": "Preview",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V15251101-Preview/MIDI-MCSTRUCTURE_NEXT_V15251101-Preview.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V15251101-Preview"
+  },
+  {
+    "API": 0,
+    "hash": "b0dd2b6f11836012c73b437daa05b435",
+    "version": 15251129,
+    "edition": "Alpha",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V15251129-Alpha/MIDI-MCSTRUCTURE_NEXT_V15251129-Alpha.7z",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V15251129-Alpha"
   }
  ]

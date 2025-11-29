@@ -218,6 +218,7 @@ dependencies = [
     { name = "py7zr" },
     { name = "pygame" },
     { name = "pyinstaller" },
+    { name = "pynbt" },
     { name = "requests" },
 ]
 
@@ -227,6 +228,7 @@ requires-dist = [
     { name = "py7zr", specifier = ">=1.0.0" },
     { name = "pygame", specifier = ">=2.6.1" },
     { name = "pyinstaller", specifier = ">=6.17.0" },
+    { name = "pynbt", specifier = ">=3.1.0" },
     { name = "requests", specifier = ">=2.32.5" },
 ]
 
@@ -250,6 +252,12 @@ sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/50/f0/a7
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/22/31/ec5f46fd4c83185b806aa9c736e228cb780f13990a9cf4da0beb70025fcc/multivolumefile-0.2.3-py3-none-any.whl", hash = "sha256:237f4353b60af1703087cf7725755a1f6fcaeeea48421e1896940cd1c920d678", size = 17037, upload-time = "2021-04-29T12:18:38.886Z" },
 ]
+
+[[package]]
+name = "mutf8"
+version = "1.0.6"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/" }
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/ca/31/3c57313757b3a47dcf32d2a9bad55d913b797efc8814db31bed8a7142396/mutf8-1.0.6.tar.gz", hash = "sha256:1bbbefb67c2e5a57104750bb04b0912200b57b2fa9841be245279e83859cb346", size = 6424, upload-time = "2021-12-29T03:02:17.271Z" }
 
 [[package]]
 name = "packaging"
@@ -444,6 +452,18 @@ dependencies = [
 sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/26/4f/e33132acdb8f732978e577b8a0130a412cbfe7a3414605e3fd380a975522/pyinstaller_hooks_contrib-2025.10.tar.gz", hash = "sha256:a1a737e5c0dccf1cf6f19a25e2efd109b9fec9ddd625f97f553dac16ee884881", size = 168155, upload-time = "2025-11-22T09:34:36.138Z" }
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/86/de/a7688eed49a1d3df337cdaa4c0d64e231309a52f269850a72051975e3c4a/pyinstaller_hooks_contrib-2025.10-py3-none-any.whl", hash = "sha256:aa7a378518772846221f63a84d6306d9827299323243db890851474dfd1231a9", size = 447760, upload-time = "2025-11-22T09:34:34.753Z" },
+]
+
+[[package]]
+name = "pynbt"
+version = "3.1.0"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/" }
+dependencies = [
+    { name = "mutf8" },
+]
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/30/e6/315b58ca0920deeeaca7bdaef687dc801658ff6c6d5c3350f6b8ad7d3b4f/PyNBT-3.1.0.tar.gz", hash = "sha256:d0e47a493df7c64390425d635bf78cd9028d692caa6e73a00b4ae579a126f45d", size = 6893, upload-time = "2020-10-12T06:56:47.447Z" }
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/b3/92/60045a2666dffed27555afee1cfdeb041f79ac43e87aa7ba7bcd0124b324/PyNBT-3.1.0-py3-none-any.whl", hash = "sha256:5cd26b6b59c6c31534db077f10700178159786fc1da5a74b79731438e33a8de2", size = 7276, upload-time = "2020-10-12T06:56:46.565Z" },
 ]
 
 [[package]]

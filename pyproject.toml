@@ -8,6 +8,7 @@ dependencies = [
     "py7zr>=1.0.0",
     "pygame>=2.6.1",
     "pyinstaller>=6.17.0",
+    "pynbt>=3.1.0",
     "requests>=2.32.5",
 ]
 
