@@ -1,11 +1,10 @@
 import os
+import log
 import math
 import json
 import time
-import mido
 import py7zr
 import shutil
-import random
 import pygame
 import hashlib
 import requests
@@ -13,38 +12,45 @@ import threading
 import traceback
 import subprocess
 import webbrowser
+from tools import round_45, uuid, is_number
 from tkinter import filedialog
+from database import LyricsList
+from ui_manager import UIManager
+from midi_reader import MIDIReader
+
 
 # 加载资源函数
 def asset_load() -> None:
     try:
-        _start_time = time.time()
-
         if os.path.exists("Asset/text/setting.json"):
             with open("Asset/text/setting.json", "rb") as _io:
                 _buffer = json.loads(_io.read())
                 for _k in _buffer:
                     global_info["setting"][_k] = _buffer[_k]
         else:
-            global_info["log"].append("[W] setting.json is Not Existing!")
+            logger.warn("setting.json is Not Existing!")
+
+        logger.set_log_level(global_info["setting"]["log_level"])
+
+        pygame.font.init()
+
+        if _progress := change_size((800, 450), False):
+            global_asset["blur"] = blur_picture(global_asset["menu"], _progress)
+            if not os.path.exists("Cache/image"):
+                os.makedirs("Cache/image")
+            pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
+        ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
+
+        pygame.init()
+
+        pygame.mixer.set_num_channels(24)
 
         if not os.path.exists("Asset/text/default_profile.json"):
-            global_info["log"].append("[I] Copy Backup Profile")
+            logger.info("Copy Backup Profile")
             shutil.copy("Asset/text/profile.json", "Asset/text/default_profile.json")
 
-        global_asset["loading_mask"] = pygame.image.load("Asset/image/loading_mask.png").convert_alpha()
-        if os.path.exists("Cache/image/blur.png"):
-            global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
-            _progress = None
-        else:
-            global_asset["blur"] = pygame.Surface(global_info["display_size"]).convert_alpha()
-            _progress = [0]
-        global_asset["logo"] = pygame.image.load("Asset/image/logo.png").convert_alpha()
-        add_page(overlay_page, [loading_screen, {"progress": _progress, "alpha": 0}], 1)
-
-        global_asset["error"] = pygame.image.load("Asset/image/error_background.png").convert_alpha()
-
         if os.path.isdir("Cache/extracted/Updater"):
+            logger.info("Replace Updater File.")
             _n = 0
             while _n <= 16:
                 try:
@@ -52,45 +58,10 @@ def asset_load() -> None:
                         shutil.rmtree("Updater")
                     break
                 except:
+                    logger.error(traceback.format_exc())
                     _n += 1
             shutil.copytree("Cache/extracted/Updater", "Updater")
             shutil.rmtree("Cache/extracted")
-
-        pygame.font.init()
-        global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", 28)
-        if os.path.exists("Asset/image/custom_menu_background.png"):
-            global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/custom_menu_background.png"), global_info["display_size"]).convert_alpha()
-        else:
-            global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/default_menu_background.png"), global_info["display_size"]).convert_alpha()
-        global_asset["config"] = pygame.image.load("Asset/image/config_background.png").convert_alpha()
-        global_asset["message_mask"] = pygame.transform.scale(pygame.image.load("Asset/image/mask.png"), (800, 40)).convert_alpha()
-
-        if not os.path.exists("Cache/image"):
-            os.makedirs("Cache/image")
-
-        if _progress is None:
-            global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
-        else:
-            global_asset["blur"] = blur_picture(global_asset["menu"], _progress)
-            pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
-
-        if os.path.exists("Cache/image/keyboard_background.png"):
-            global_asset["kb_background"] = pygame.image.load("Cache/image/keyboard_background.png").convert_alpha()
-        else:
-            _keyboard_mask = pygame.image.load("Asset/image/keyboard_mask.png").convert_alpha()
-            global_asset["kb_background"] = global_asset["menu"].copy()
-
-            _kb_mask_size = _keyboard_mask.get_size()
-
-            for _x in range(_kb_mask_size[0]):
-                for _y in range(_kb_mask_size[1]):
-                    _color = _keyboard_mask.get_at((_x, _y))
-                    if sum((_value * _color[3]) ** 2 for _value in _color[:3]) != 0:
-                        global_asset["kb_background"].set_at((_x, _y), global_asset["blur"].get_at((_x, _y)))
-
-            global_asset["kb_background"].blit(_keyboard_mask, (0, 0))
-
-            pygame.image.save(global_asset["kb_background"], "Cache/image/keyboard_background.png")
 
         global_asset["structure"] = []
         for _n in os.listdir("Asset/mcstructure"):
@@ -100,28 +71,67 @@ def asset_load() -> None:
                 else:
                     global_asset["structure"].append(_n)
         if not global_asset["structure"]:
-            global_info["log"].append("[W] No Structure File!")
+            logger.warn("No Structure File!")
 
         _message = "小提示：使用鼠标左右键来进入或返回页面！"
         try:
             load_profile()
         except:
-            _message = "无法加载配置文件，已加载备用的配置文件！"
+            logger.error(traceback.format_exc())
+            _message = "无法加载配置文件，已加载备配置文件！"
             load_profile("Asset/text/default_profile.json")
-            global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
 
         threading.Thread(target=get_version_list).start()
 
-        while time.time() - _start_time < 0.5:
-            time.sleep(0.01)
-        time.sleep(0.5)
+        time.sleep(1)
 
         global_info["message"].append(_message)
 
-        add_page(overlay_page, [menu_screen, {"config": [["转换文件", 0, start_to_game], ["设置", 0, ask_software_setting], ["关于MIDI-MCSTRUCTURE", 0, show_about]]}], 0, False)
+        remove_page(overlay_page)
+        add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0]}], 0, False)
     except:
         global_info["exit"] = 3
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+        logger.error(traceback.format_exc())
+
+def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygame.Surface]:
+    _progress = None
+    try:
+        # 加载背景
+        if os.path.exists("Asset/image/custom_menu_background.png"):
+            global_asset["menu"] = pygame.image.load("Asset/image/custom_menu_background.png").convert_alpha()
+        else:
+            global_asset["menu"] = pygame.image.load("Asset/image/default_menu_background.png").convert_alpha()
+
+        if os.path.exists("Cache/image/blur.png"):
+            global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
+        else:
+            global_asset["blur"] = pygame.Surface(global_asset["menu"].get_size()).convert_alpha()
+            _progress = [0, global_asset["menu"].get_size()[0]]
+        # 添加资源
+        ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
+        # 设置尺寸
+        ui_manager.change_size(_size)
+        # 加载错误界面
+        global_asset["error"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/error_background.png"), ui_manager.get_real_position((1, 1))).convert_alpha()
+        # 加载logo
+        global_asset["logo"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/logo.png"), ui_manager.get_real_position((0.7, 0.142))).convert_alpha()
+        # 加载启动遮罩背景
+        global_asset["loading_mask"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading_mask.png"), ui_manager.get_real_position((1, 1))).convert_alpha()
+        # 添加启动页面
+        add_page(overlay_page, [loading_screen, {"progress": _progress, "alpha": 0}], 1)
+        # 加载字体
+        global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", ui_manager.get_real_position((0, 0.062))[1])
+        # 加载消息背景
+        global_asset["message_mask"] = pygame.transform.scale(pygame.image.load("Asset/image/mask.png"), ui_manager.get_real_position((1, 0.089))).convert_alpha()
+        # 移除页面
+        if _exit:
+            time.sleep(0.3)
+            remove_page(overlay_page)
+    except:
+        logger.fatal(traceback.format_exc())
+        global_info["exit"] = 3
+
+    return _progress
 
 def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=7, _sigma: float=2) -> pygame.Surface:
     _kernel = []
@@ -148,7 +158,7 @@ def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=
     _result = pygame.Surface(_surf_size).convert_alpha()
 
     for _x in range(_surf_size[0]):
-        _progress[0] = _x
+        _progress[0] = _x + 1
         for _y in range(_surf_size[1]):
             _color = (0, 0, 0)
             for _kx in range(_kernel_size):
@@ -185,250 +195,6 @@ def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
     return _sound_list
 
 # MIDI转换
-class InfoList:
-    def __init__(self, _init_value) -> None:
-        self.list_info = {float("-inf"): _init_value}
-
-    def __iter__(self):
-        for _i in sorted(list(self.list_info)):
-            yield self.list_info[_i]
-
-    def add_info(self, _time: int | float | str, _value) -> None:
-        if not any((isinstance(_time, int), isinstance(_time, float), isinstance(_time, str))):
-            raise ValueError("Time Must be int, float or str!")
-        self.list_info[float(_time)] = _value
-
-    def match_info(self, _time: int | float | str):
-        if not any((isinstance(_time, int), isinstance(_time, float), isinstance(_time, str))):
-            raise ValueError("Time Must be int, float or str!")
-
-        _time = float(_time)
-        _time_list = sorted(list(self.list_info), reverse=True)
-        for _i in _time_list:
-            if _i <= _time:
-                return self.list_info[_i]
-
-        raise ValueError("Couldn't find a Matched Value!")
-
-class TempoList:
-    def __init__(self, _ticks_per_beat: int) -> None:
-        self.ticks_per_beat = _ticks_per_beat
-        self.tempo_list = [(0, 500000)]
-        self.is_revised = False
-
-    def add_tempo(self, _time: int | float | str, _tempo: int) -> None:
-        if not any((isinstance(_time, int), isinstance(_time, float), isinstance(_time, str))):
-            raise ValueError("Time Must be int, float or str!")
-        if not isinstance(_tempo, int):
-            raise ValueError("Tempo Must be int!")
-        self.tempo_list.append((_time, _tempo))
-        self.is_revised = True
-
-    def compute_tick_time(self, _time: int | float | str) -> float:
-        if not any((isinstance(_time, int), isinstance(_time, float), isinstance(_time, str))):
-            raise ValueError("Time Must be int, float or str!")
-
-        if self.is_revised:
-            self.tempo_list.sort(key=lambda _i: _i[0])
-            self.is_revised = False
-
-        _real_time = 0
-
-        for _n in range(1, len(self.tempo_list)):
-            if self.tempo_list[_n][0] <= _time and _n + 1 != len(self.tempo_list):
-                _real_time += mido.tick2second(self.tempo_list[_n][0] - self.tempo_list[_n - 1][0], self.ticks_per_beat, self.tempo_list[_n - 1][1]) * 1000
-            else:
-                _real_time += mido.tick2second(_time - self.tempo_list[_n - 1][0], self.ticks_per_beat, self.tempo_list[_n - 1][1]) * 1000
-                break
-        return _real_time
-
-class LyricsList:
-    def __init__(self, _lyrics_list: dict[int, str], _smooth: bool=True, _join: bool=False):
-        if not all(isinstance(_i, int) and isinstance(_lyrics_list[_i], str) for _i in _lyrics_list):
-            raise TypeError("Unsupported Lyrics Struct!")
-
-        self.lyrics_list = []
-        _time_list = sorted(list(_lyrics_list))
-
-        # 处理歌词文本
-        if _join:
-            # 计算平均间隔时间
-            _time_num = 0
-            _last_time = min(_time_list)
-            _average_delay_time = [0, 0]
-            for _k in _time_list:
-                _average_delay_time[0] += _k - _last_time
-                _average_delay_time[1] += 1
-                _last_time = _k
-            # 判断除数是否为0
-            if _average_delay_time[1]:
-                _average_delay_time = _average_delay_time[0] / _average_delay_time[1]
-                _step = _average_delay_time * 0.01
-                # 微调合并的间隔时间，避免出现太长的歌词
-                while True:
-                    # 检测是否存在过长的歌词
-                    _num = 0
-                    _last_time = min(_time_list)
-                    for _k in _time_list:
-                        _lyrics_length = len(_lyrics_list[_k])
-                        if _k - _last_time <= _average_delay_time and _lyrics_length < 16:
-                            _num += _lyrics_length
-                        else:
-                            _num = 0
-                        _last_time = _k
-                        # 如果存在过长的歌词就微调间隔时间并退出尝试下个间隔时间
-                        if _num >= 16:
-                            _average_delay_time -= _step
-                            break
-                    # 检测是否因为歌词过长而退出，如果不是就结束迭代
-                    if _num < 16:
-                        break
-                # 合并歌词
-                _lyrics_text_buffer = ""
-                _last_time = min(_time_list)
-                for _k in _time_list:
-                    if any((len(_lyrics_text_buffer) > 16, len(_lyrics_list[_k]) > 16 and _k != _time_list[0], _average_delay_time <= _k - _last_time)):
-                        self.lyrics_list.append(_lyrics_text_buffer)
-                        _lyrics_text_buffer = ""
-                    _lyrics_text_buffer += _lyrics_list[_k]
-                    _last_time = _k
-                # 处理剩余的一句歌词
-                if _lyrics_text_buffer:
-                    self.lyrics_list.append(_lyrics_text_buffer)
-        else:
-            self.lyrics_list = list(_lyrics_list[_i] for _i in _time_list)
-
-        # 生成时间点信息
-        _node_list = []
-        if _smooth:
-            _num = 0
-            _time_list_length = len(_time_list)
-            for _i in range(1, _time_list_length):
-                _text_length = len(_lyrics_list[_time_list[_i - 1]])
-                _delta_time = _time_list[_i] - _time_list[_i - 1]
-                for _n in range(_delta_time):
-                    _node_list.append((_n + _time_list[_i - 1], int(round_45(_text_length * ((_n + 1) / _delta_time))) + _num))
-                _num += _text_length
-            _node_list.append((max(_time_list), sum(len(_lyrics_list[_k]) for _k in _time_list)))
-        else:
-            _num = 0
-            for _k in _time_list:
-                _num += len(_lyrics_list[_k])
-                _node_list.append((_k, _num))
-        self.node_list = _node_list
-
-    def __iter__(self):
-        # 渲染歌词
-        _lyrics_list_length = len(self.lyrics_list)
-        for _k, _i in self.node_list:
-            _lyrics_position = 0
-            for _n in range(_lyrics_list_length):
-                _text_length = len(self.lyrics_list[_n])
-                if _lyrics_position + _text_length >= _i:
-                    yield _k, (self.lyrics_list[_n - 1] if _n > 0 else "", (self.lyrics_list[_n][:_i - _lyrics_position], self.lyrics_list[_n][_i - _lyrics_position:]), self.lyrics_list[_n + 1] if _n < _lyrics_list_length - 1 else "")
-                    break
-                _lyrics_position += _text_length
-
-class MIDIReader:
-    def __init__(self, _path: str):
-        self.midi_file = None
-        # 尝试使用UTF-8编码解码MIDI文件
-        for _charset in ("utf-8", "latin1"):
-            try:
-                # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
-                self.midi_file = mido.MidiFile(_path, charset=_charset, clip=True)
-                break
-            except:
-                pass
-
-        if self.midi_file is None:
-            raise IOError("Can't Load MIDI File: " + str(_path))
-
-    def __iter__(self):
-        _channel_info = {}
-        _tempo_info = TempoList(self.midi_file.ticks_per_beat)
-
-        # 遍历每个轨道
-        for _track in self.midi_file.tracks:
-            # 设置轨道初始时间
-            _time = 0
-            # 遍历每个音符
-            for _message in _track:
-                # 初始化返回值
-                _data = None
-                # 累加时间，将时间差表示转为时间轴表示
-                _time += _message.time
-                # 判断该事件是否有通道数据，如果有并且通道没有初始化数据就初始化该通道
-                if hasattr(_message, "channel"):
-                    _channel = _message.channel
-                    if _channel not in _channel_info:
-                        _channel_info[_channel] = {
-                            "program": InfoList(-1),
-                            "volume": InfoList(1),
-                            "panning": InfoList((0, 1))}
-                else:
-                    _channel = -1
-                # 获取tempo信息
-                if _message.type == "set_tempo":
-                    _tempo_info.add_tempo(_time, _message.tempo)
-                # 获取MIDI控制事件
-                elif _message.type == "control_change":
-                    _value = _message.value
-                    # 通道音量控制器，调整某个通道音量
-                    if _message.control == 7:
-                        _channel_info[_channel]["volume"].add_info(_time, _value)
-                    # 通道声像控制器
-                    elif _message.control == 10:
-                        _radian = math.radians(_value * 1.40625)
-                        _channel_info[_channel]["panning"].add_info(_time, (round_45(math.cos(_radian), 2), round_45(math.sin(_radian), 2)))
-                    # 清除通道效果控制器
-                    elif _message.control == 121:
-                        _channel_info[_channel]["volume"].add_info(_time, 1)
-                        _channel_info[_channel]["panning"].add_info(_time, (0, 1))
-                # 获取通道音色事件
-                if _message.type == "program_change":
-                    # 获取乐器代号
-                    _program = _message.program
-                    # 判断是否是打击乐器专属的轨道，如果是就不添加音色信息，因为打击乐器用note来表示音色
-                    if _channel != 9:
-                        _channel_info[_channel]["program"].add_info(_time, _program)
-                # 获取歌词事件
-                elif _message.type == "lyrics":
-                    # 获取歌词数据
-                    _data = {
-                        "type": "text",
-                        "text": _message.text
-                    }
-                # 获取音符信息
-                elif _message.type == "note_on" and _message.velocity != 0:
-                    # 对音符力度（音量）进行归一化处理
-                    _note_velocity = _message.velocity / 127
-                    # 音符音量再乘以音符所在的通道的音量
-                    _note_velocity *= _channel_info[_channel]["volume"].match_info(_time)
-                    # 获取声相偏移数据
-                    _note_panning = _channel_info[_channel]["panning"].match_info(_time)
-                    # 一般音符用于表示音调，打击乐器（第十轨道上的音符）用于表示音色
-                    if _channel == 9:
-                        # 打击乐器保持原声
-                        _note_pitch = 45
-                        _note_program = _message.note
-                    else:
-                        _note_pitch = _message.note - 21
-                        _note_program = _channel_info[_channel]["program"].match_info(_time)
-                    # 打包数据
-                    _data = {
-                        "type": "note",
-                        "percussion": _channel == 9,
-                        "velocity": _note_velocity,
-                        "panning": _note_panning,
-                        "program": _note_program,
-                        "pitch": _note_pitch
-                    }
-
-                if _data is not None:
-                    # 将音符时间转为游戏tick时间并返回结果
-                    yield _tempo_info.compute_tick_time(_time), _data
-
 def convertor(_setting, _task_id):
     # 添加正在处理页面
     add_page(overlay_page, [processing_screen, {}])
@@ -463,22 +229,17 @@ def convertor(_setting, _task_id):
                 if 0 <= _data["pitch"] < len(global_asset["profile"]["note_list"]):
                     _pitch = global_asset["profile"]["note_list"][_data["pitch"]]
                 else:
-                    global_info["log"].append("[W] Pitch " + str(_data["pitch"]) + " Out of Range!")
+                    logger.warn("Pitch " + str(_data["pitch"]) + " Out of Range!")
                     continue
 
                 # 获取游戏中的乐器名称
                 if _data["percussion"]:
-                    if _data["program"] in _profile["sound_list"]["percussion"]:
-                        _program = _profile["sound_list"]["percussion"][_data["program"]]
-                    else:
-                        _program = _profile["sound_list"]["percussion"]["undefined"]
+                    _program = _profile["sound_list"]["percussion"].get(_data["program"], _profile["sound_list"]["percussion"]["undefined"])
                 else:
                     if _data["program"] == -1:
                         _program = _profile["sound_list"]["default"]
-                    elif _data["program"] in _profile["sound_list"]:
-                        _program = _profile["sound_list"][_data["program"]]
                     else:
-                        _program = _profile["sound_list"]["undefined"]
+                        _program = _profile["sound_list"].get(_data["program"], _profile["sound_list"]["undefined"])
 
                 _delay_time = 0
                 # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
@@ -553,7 +314,7 @@ def convertor(_setting, _task_id):
         if _setting["lyrics"]["enable"]:
             _lyrics_file: bool = os.path.exists(os.path.splitext(_setting["file"])[0] + ".lrc")
             if _lyrics_file:
-                global_info["log"].append("[I] Find LRC File")
+                logger.info("Find LRC File")
 
                 for _charset in ("utf-8", "ANSI"):
                     try:
@@ -675,7 +436,7 @@ def convertor(_setting, _task_id):
                             break
     except:
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+        logger.error(traceback.format_exc())
     finally:
         remove_page(overlay_page)
 
@@ -885,9 +646,7 @@ def load_lrc(_str: list[str], _time_per_tick: int=50) -> dict[int, str]:
 
 # 页面渲染函数
 def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
-
     _pages_num = len(_overlay)
-
     for _n in range(_pages_num):
         if _n + 1 == _pages_num or _overlay[_n + 1][2] != 1:
             _root.blit(to_alpha(_overlay[_n][0](_overlay[_n][1], _event if _overlay[_n][3] else {}), (255, 255, 255, 255 * _overlay[_n][2])), (0, 0))
@@ -907,9 +666,12 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
     if global_info["message"]:
         global_info["message_info"][1] += timer.get_time()
 
-        _root.blit(global_asset["message_mask"], (0, 450 - global_info["message_info"][0] * 40))
+        _root.blit(global_asset["message_mask"], ui_manager.get_real_position((0, 1 - global_info["message_info"][0] * 0.089), True))
+
         _text_surface = to_alpha(global_asset["font"].render(global_info["message"][0], True, (255, 255, 255)), (255, 255, 255, 255 * global_info["message_info"][0]))
-        _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, 470 - global_info["message_info"][0] * 40 - _text_surface.get_size()[1] / 2))
+
+        _text_position = ui_manager.get_real_position((1, 1.044 - global_info["message_info"][0] * 0.089))
+        _root.blit(_text_surface, ((_text_position[0] - _text_surface.get_size()[0]) / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
 
         if global_info["message_info"][1] <= 3000:
             global_info["message_info"][0] += (1 - global_info["message_info"][0]) * global_info["animation_speed"]
@@ -929,38 +691,120 @@ def to_alpha(_origin_surf: pygame.Surface, _color_value, _surf_size=None, _surf_
     _origin_surf.blit(_alpha_surf, _surf_position, special_flags=pygame.BLEND_RGBA_MULT)
     return _origin_surf
 
-def round_45(_i: float, _n=0) -> float:
-    _i = int(_i * 10 ** int(_n + 1))
-    if _i % 10 >= 5:
-        _i += 10
-    _i = int(_i / 10)
-    return _i / (10 ** int(_n))
-
-def uuid(_n: int) -> str:
-    _uuid = ""
-    while _n:
-        _uuid += str(hex(random.randint(0, 15)))[2:]
-        _n -= 1
-    return _uuid
-
-def is_number(_str: str) -> bool:
-    _length = len(_str)
-    return all(_str[_i] in "0123456789" or (_str[_i] == "." and 1 < _i + 1 < _length) for _i in range(_length)) and _str.count(".") <= 1
-
 def watchdog():
     while True:
-        if global_info["watch_dog"] >= 10:
-            global_info["log"].extend(("[E] Run Timed Out of 1000ms Exceeded!", "[I] Process is Killed by Watchdog!"))
-            save_log()
+        if global_info["watch_dog"] >= 30:
+            logger.fatal("Run Timed Out of 3000ms Exceeded!\nProcess is Killed by Watchdog!")
+            logger.done()
             os._exit(0)
         global_info["watch_dog"] += 1
         time.sleep(0.1)
 
-def save_log():
-    if global_info["log"] and global_info["setting"]["log_level"]:
-        with open("log.txt", "a", encoding="utf-8") as _io:
-            _io.write("[" + ("V" + str(global_info["setting"]["version"]) if global_info["setting"]["version"] else "Unknown") + "] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
-            _io.writelines("  " + _line + "\n" for _line in filter(lambda _text: not ((_text[:3] == "[W]" and global_info["setting"]["log_level"] < 2) or (_text[:3] == "[I]" and global_info["setting"]["log_level"] < 3)), global_info["log"]))
+def change_button_alpha(_state: list[float], _index: int) -> None:
+    for _n in range(len(_state)):
+        if _n == _index:
+            _state[_n] += (255 - _state[_n]) * global_info["animation_speed"]
+        else:
+            _state[_n] += (127 - _state[_n]) * global_info["animation_speed"]
+
+def reduce_background():
+    try:
+        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")]):
+            pygame.image.save(pygame.transform.smoothscale(pygame.image.load(_path), (800, 450)), "Asset/image/custom_menu_background.png")
+            shutil.rmtree("Cache/image")
+            global_info["message"].append("已成功设置背景，重启软件生效！")
+    except:
+        logger.error(traceback.format_exc())
+        global_info["message"].append("无法加载图片文件！")
+
+def set_selector_num(_num: None | int = None) -> None:
+    if _num is None:
+        global_info["message"].append("请输入最多压缩到单条指令内的时间项数！")
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_selector_num"], "text": "", "callback": set_selector_num, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
+    else:
+        if _num >= 2:
+            global_info["setting"]["max_selector_num"] = _num
+        else:
+            global_info["setting"]["max_selector_num"] = 2
+            global_info["message"].append("单条指令内的时间项数至少为2个！")
+
+def show_download(_title: str, _url: str, _hash: str, _callback=lambda: remove_page(overlay_page)):
+    _state = {"state": 0, "downloaded": 0, "total": 0}
+    threading.Thread(target=download, args=(_url, _state, _hash)).start()
+    add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "time": 0, "done": False, "callback": _callback}])
+
+def reboot_to_update():
+    global_info["exit"] = 2
+
+def start_install_editor():
+    remove_page(overlay_page)
+    threading.Thread(target=install_editor).start()
+
+def install_editor():
+    try:
+        if os.path.exists("Editor"):
+            logger.warn("\"Editor\" Directory Will be Removed!")
+            shutil.rmtree("Editor")
+        shutil.move("Cache/extracted", "Editor")
+        enter_to_editor()
+    except:
+        logger.error(traceback.format_exc())
+
+def enter_to_editor():
+    add_page(overlay_page, [processing_screen, {}])
+    _remove = True
+    try:
+        with open("Editor/metadata.json", "rb") as _io:
+            _meta_data = json.loads(_io.read())
+        assert global_info["editor_update"] and _meta_data["version"] < global_info["editor_update"]["version"]
+
+        subprocess.Popen("Editor/ProfileEditor.exe").wait()
+        load_profile()
+        global_info["message"].append("已重新加载配置文件！")
+    except:
+        remove_page(overlay_page)
+        logger.error(traceback.format_exc())
+        if global_info["editor_update"]:
+            show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], global_info["editor_update"]["hash"], start_install_editor)
+        else:
+            global_info["message_info"].append("无法加载编辑器版本信息，请稍后重试！")
+
+def open_filedialog():
+    try:
+        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("MIDI Files", ".mid")]):
+            global_info["convertor"]["file"] = _path
+            if os.path.exists(os.path.splitext(_path)[0] + ".lrc"):
+                global_info["message"].append("检测到同名的.lrc文件，启用歌词显示即可加载歌词！")
+            else:
+                global_info["message"].append("未检测到同名的.lrc文件，若启用歌词显示将尝试从MIDI中获取")
+    except:
+        logger.error(traceback.format_exc())
+
+def set_time_per_tick(_time: None | int = None) -> None:
+    if _time is None:
+        global_info["message"].append("请输入每游戏刻的时间！")
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["convertor"]["time_per_tick"], "text": "ms/tick", "callback": set_time_per_tick, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
+    else:
+        global_info["convertor"]["time_per_tick"] = _time
+
+def start_task(_id: None | int = None) -> None:
+    if not global_info["convertor"]["file"]:
+        return
+    if global_info["convertor"]["edition"] == -1:
+        return
+    if global_info["convertor"]["output_format"] == -1:
+        return
+    if global_info["convertor"]["time_per_tick"] == -1:
+        return
+
+    if global_info["convertor"]["command_type"] == 2 and _id is None:
+        global_info["message"].append("请输入编号！")
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["id"], "text": "", "callback": start_task, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
+    else:
+        global_info["setting"]["id"] = _id
+        _argument = global_info["convertor"].copy()
+        _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
+        threading.Thread(target=convertor, args=(_argument, _id)).start()
 
 # GUI页面管理函数
 def add_page(_overlay, _page, _position=0, _back=True):
@@ -976,7 +820,8 @@ def remove_page(_overlay):
 # 版本更新函数
 def get_version_list():
     try:
-        _update_log = json.loads(requests.get("https://gitee.com/mrdxhmagic/midi-mcstructure_next/raw/master/update.json").content)
+        with requests.get("https://gitee.com/mrdxhmagic/midi-mcstructure_next/raw/master/update.json") as _response:
+            _update_log = _response.json()
 
         global_info["update_list"] = []
         for _i in _update_log:
@@ -994,7 +839,7 @@ def get_version_list():
 
         global_info["new_version"] = global_info["update_list"][0]["version"] > global_info["setting"]["version"]
     except:
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+        logger.error(traceback.format_exc())
 
 def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=True):
     try:
@@ -1007,7 +852,7 @@ def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=Tr
                     _file_hash.update(_data_chunk)
         if str(_file_hash.hexdigest()) != _target_hash or not _target_hash:
             if os.path.exists("Cache/download"):
-                global_info["log"].append("[W] Cache/download Will be Removed!")
+                logger.warn("Cache/download Will be Removed!")
                 shutil.rmtree("Cache/download")
             os.makedirs("Cache/download")
 
@@ -1030,291 +875,278 @@ def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=Tr
         _state["state"] = 1
 
         if os.path.exists("Cache/extracted"):
-            global_info["log"].append("[W] Cache/extracted Will be Removed!")
+            logger.warn("Cache/extracted Will be Removed!")
             shutil.rmtree("Cache/extracted")
         os.makedirs("Cache/extracted")
 
-        global_info["log"].append("[I] Extract " + _file_name)
+        logger.info("Extract " + _file_name)
         with py7zr.SevenZipFile("Cache/download/" + _file_name, "r") as _io:
             _io.extractall("Cache/extracted")
     except:
+        logger.error(traceback.format_exc())
         _state["state"] = -1
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
     finally:
         if _state["state"] != -1:
             _state["state"] = 2
 
-# 各种回调函数（用于GUI）
-def start_to_game():
-    add_page(overlay_page, [convertor_screen, {"config": [["选择文件", 0, ask_file], ["游戏版本", 0, ask_edition], ["常用设置", 0, ask_setting], ["其他设置", 0, ask_other_setting], ["开始", 0, start_task]]}])
+# 各种函数（用于GUI）
+def loading_screen(_info, _input) -> pygame.Surface:
+    _surf = ui_manager.get_blur_background(True)
+    if _info["progress"] is not None:
+        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_real_position((0.25, 0.733, 0.5, 0.053), True), 2)
+        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_real_position((0.255, 0.742, 0.49 * (_info["progress"][0] / _info["progress"][1]), 0.036), True), 0)
+        if _info["progress"][0] == _info["progress"][1]:
+            _info["alpha"] += (255 - _info["alpha"]) * global_info["animation_speed"]
+            _surf = to_alpha(_surf, (255, 255, 255, round_45(_info["alpha"])))
+    _surf.blits(((global_asset["loading_mask"], ui_manager.get_real_position((0, 0), True)), (global_asset["logo"], ui_manager.get_real_position((0.15, 0.429), True))))
+    return _surf
+
+def menu_screen(_info, _input):
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("转换文件", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("软件设置" + ("（新版本）" if global_info["new_version"] else ""), 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("关于MIDI-MCSTRUCTURE NEXT", 0.035, _info["button_state"][2]), 2)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}])
+            case 1:
+                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0]}])
+            case 2:
+                if global_info["setting"]["version"]:
+                    _edition = "V" + str(global_info["setting"]["version"])
+                else:
+                    _edition = "Unknown"
+                if global_info["setting"]["edition"]:
+                    _edition += "-" + str(global_info["setting"]["edition"])
+                add_page(overlay_page, [about_screen, {"edition": _edition, "button_state": [0, 0, 0]}])
+
+    change_button_alpha(_info["button_state"], _id)
+
+    return _root
 
 def convertor_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
+    if global_info["convertor"]["edition"] == 0:
+        _ver_text = "基岩版"
+        if global_info["convertor"]["version"] == 0:
+            _ver_text += "（1.19.50以下）"
+        elif global_info["convertor"]["version"] == 1:
+            _ver_text += "（1.19.50以上）"
+    elif global_info["convertor"]["edition"] == 1:
+        _ver_text = "Java版"
+        if global_info["convertor"]["version"] == 0:
+            _ver_text += "（1.13以下）"
+        elif global_info["convertor"]["version"] == 1:
+            _ver_text += "（1.13以上）"
+    else:
+        _ver_text = "选择游戏版本"
 
-    mouse_position = pygame.mouse.get_pos()
+    if global_info["convertor"]["output_format"] != -1:
+        if global_info["convertor"]["output_format"] == 0:
+            _base_text = "mcstructure"
+        elif global_info["convertor"]["output_format"] == 1:
+            _base_text = "mcfunction"
+        else:
+            _base_text = ""
+        if global_info["convertor"]["command_type"] == 0:
+            _base_text += "/命令链延迟"
+        elif global_info["convertor"]["command_type"] == 1:
+            _base_text += "/计分板时钟"
+        elif global_info["convertor"]["command_type"] == 2:
+            _base_text += "/时钟与编号"
+        if global_info["convertor"]["volume"]: _base_text += "/" + str(global_info["convertor"]["volume"]) + "%"
+        if global_asset["structure"] and global_info["convertor"]["output_format"] == 0: _base_text += "/" + os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0]
+    else:
+        _base_text = "基本设置"
 
-    for _n, _i in enumerate(_info["config"]):
-        _text = _i[0]
-        _y = 20 + _n * 60
-        if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            if _n == 4:
+    if global_info["convertor"]["time_per_tick"] != -1:
+        _other_text = str(global_info["convertor"]["time_per_tick"]) + "ms"
+        if global_info["convertor"]["panning"]:
+            _other_text += "/声相偏移"
+        if global_info["convertor"]["skip"]:
+            _other_text += "/静音跳过"
+        if global_info["convertor"]["percussion"]:
+            _other_text += "/打击乐器"
+        if global_info["convertor"]["adjustment"]:
+            _other_text += "/乐器调整"
+        if global_info["convertor"]["lyrics"]["enable"]:
+            _other_text += "/歌词"
+        if global_info["convertor"]["compression"]:
+            _other_text += "/压缩"
+    else:
+        _other_text = "其他设置"
+
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, (os.path.splitext(os.path.basename(global_info["convertor"]["file"]))[0] if global_info["convertor"]["file"] else "选择MIDI文件", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, (_ver_text, 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, (_base_text, 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.444, 0.95, 0.089, (_other_text, 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.578, 0.95, 0.089, ("开始转换", 0.035, _info["button_state"][4]), 4)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    change_button_alpha(_info["button_state"], _id)
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                threading.Thread(target=open_filedialog).start()
+            case 1:
+                if global_info["convertor"]["edition"] == -1:
+                    global_info["convertor"]["edition"] = 0
+                add_page(overlay_page, [game_edition_screen, {"button_state": [0, 0]}])
+            case 2:
+                if global_info["convertor"]["output_format"] == -1:
+                    global_info["convertor"]["output_format"] = 0
+                add_page(overlay_page, [setting_screen, {"button_state": [0, 0, 0, 0]}])
+            case 3:
+                if global_info["convertor"]["time_per_tick"] == -1:
+                    global_info["convertor"]["time_per_tick"] = 50
+                add_page(overlay_page, [other_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0]}])
+            case 4:
                 if not global_info["convertor"]["file"]:
-                    _text = "请选择文件"
+                    global_info["message"].append("请选择文件")
                 elif global_info["convertor"]["edition"] == -1:
-                    _text = "请选择游戏版本"
+                    global_info["message"].append("请选择游戏版本")
                 elif global_info["convertor"]["output_format"] == -1:
-                    _text = "请完成常用设置"
+                    global_info["message"].append("请完成常用设置")
                 elif global_info["convertor"]["time_per_tick"] == -1:
-                    _text = "请完成其他设置"
-            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                _i[2]()
-        else:
-            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        if _n == 0:
-            if global_info["convertor"]["file"]:
-                _text = os.path.splitext(os.path.basename(global_info["convertor"]["file"]))[0]
-        elif _n == 1:
-            if global_info["convertor"]["edition"] == 0:
-                _text = "基岩版"
-                if global_info["convertor"]["version"] == 0:
-                    _text += "（1.19.50以下）"
-                elif global_info["convertor"]["version"] == 1:
-                    _text += "（1.19.50以上）"
-            elif global_info["convertor"]["edition"] == 1:
-                _text = "Java版"
-                if global_info["convertor"]["version"] == 0:
-                    _text += "（1.13以下）"
-                elif global_info["convertor"]["version"] == 1:
-                    _text += "（1.13以上）"
-        elif _n == 2 and global_info["convertor"]["output_format"] != -1:
-            if global_info["convertor"]["output_format"] == 0:
-                _text = "mcstructure"
-            elif global_info["convertor"]["output_format"] == 1:
-                _text = "mcfunction"
-            else:
-                _text = ""
-            if global_info["convertor"]["command_type"] == 0:
-                _text += "/命令链延迟"
-            elif global_info["convertor"]["command_type"] == 1:
-                _text += "/计分板时钟"
-            elif global_info["convertor"]["command_type"] == 2:
-                _text += "/时钟与编号"
-            if global_info["convertor"]["volume"]:
-                _text += "/" + str(global_info["convertor"]["volume"]) + "%"
-            if global_asset["structure"] and global_info["convertor"]["output_format"] == 0:
-                _text += "/" + os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0]
-        elif _n == 3 and global_info["convertor"]["time_per_tick"] != -1:
-            _text = str(global_info["convertor"]["time_per_tick"]) + "ms"
-            if global_info["convertor"]["panning"]:
-                _text += "/声相偏移"
-            if global_info["convertor"]["skip"]:
-                _text += "/静音跳过"
-            if global_info["convertor"]["percussion"]:
-                _text += "/打击乐器"
-            if global_info["convertor"]["adjustment"]:
-                _text += "/乐器调整"
-            if global_info["convertor"]["lyrics"]["enable"]:
-                _text += "/歌词"
-            if global_info["convertor"]["compression"]:
-                _text += "/压缩"
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blits(((global_asset["config"], (20, _y)), (_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))))
-
-    _root.blit(_mask, (0, 0))
+                    global_info["message"].append("请完成其他设置")
+                else:
+                    start_task()
 
     return _root
-
-def loading_screen(_info, _input) -> pygame.Surface:
-    _surf = global_asset["blur"].copy()
-    if _info["progress"] is not None:
-        pygame.draw.rect(_surf, (255, 255, 255), (200, 330, 400, 24), 2)
-        pygame.draw.rect(_surf, (255, 255, 255), (204, 334, round_45(392 * (_info["progress"][0] + 1) / global_info["display_size"][0]), 16), 0)
-        if _info["progress"][0] + 1 == global_info["display_size"][0]:
-            _info["alpha"] += (255 - _info["alpha"]) * global_info["animation_speed"]
-            _surf = to_alpha(_surf, (255, 255, 255, round_45(_info["alpha"])))
-    _surf.blits(((global_asset["loading_mask"], (0, 0)), (global_asset["logo"], (120, 193))))
-    return _surf
-
-def menu_screen(_info, _input):
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
-
-    mouse_position = pygame.mouse.get_pos()
-
-    for _n, _i in enumerate(_info["config"]):
-        _y = 20 + _n * 60
-        if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                _i[2]()
-        else:
-            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = to_alpha(global_asset["font"].render(_i[0] + ("（发现新版本）" if global_info["new_version"] and _n == 1 else ""), True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blits(((global_asset["config"], (20, _y)), (_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))))
-
-    _root.blit(_mask, (0, 0))
-
-    return _root
-
-def ask_software_setting():
-    add_page(overlay_page, [software_setting_screen, {"config": [["查看更新", 0], ["单指令内时间数 ", 0], ["界面刷新率 ", 0], ["动画速度 ", 0], ["日志等级 ", 0], ["自定义背景", 0], ["MMS指令编辑器", 0]]}])
 
 def software_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         global_info["new_version"] = False
         remove_page(overlay_page)
 
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("查看更新" + ("（新版本）" if global_info["new_version"] else ""), 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("单指令内时间数 " + str(global_info["setting"]["max_selector_num"]), 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("界面刷新率 " + (str(global_info["setting"]["fps"]) + "Hz" if global_info["setting"]["fps"] else "无限制"), 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.444, 0.95, 0.089, ("动画速度 " + str(global_info["setting"]["animation_speed"]) + "F", 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.578, 0.95, 0.089, ("日志等级 " + str(global_info["setting"]["log_level"]), 0.035, _info["button_state"][4]), 4),
+            (0.025, 0.711, 0.95, 0.089, ("自定义背景", 0.035, _info["button_state"][5]), 5),
+            (0.025, 0.844, 0.95, 0.089, ("MMS指令编辑器", 0.035, _info["button_state"][6]), 6)
+        ),
+        pygame.mouse.get_pos()
+    )
 
-    mouse_position = pygame.mouse.get_pos()
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                add_page(overlay_page, [version_list_screen, {"index": 0, "button_state": [0, 0, 0, 0]}])
+            case 1:
+                set_selector_num()
+            case 2:
+                global_info["setting"]["fps"] += 30
+                if global_info["setting"]["fps"] > 120:
+                    global_info["setting"]["fps"] = 0
+            case 3:
+                global_info["setting"]["animation_speed"] += 1
+                if global_info["setting"]["animation_speed"] >= 16:
+                    global_info["setting"]["animation_speed"] = 0
+            case 4:
+                global_info["setting"]["log_level"] += 1
+                if global_info["setting"]["log_level"] >= 6:
+                    global_info["setting"]["log_level"] = 0
+                logger.set_log_level(global_info["setting"]["log_level"])
+            case 5:
+                threading.Thread(target=reduce_background).start()
+            case 6:
+                threading.Thread(target=enter_to_editor).start()
 
-    for _n, _i in enumerate(_info["config"]):
-        _text = _i[0]
-        _y = 20 + _n * 60
-        if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                if _n == 0:
-                    show_version_list()
-                elif _n == 1:
-                    set_selector_num()
-                elif _n == 2:
-                    global_info["setting"]["fps"] += 30
-                    if global_info["setting"]["fps"] > 120:
-                        global_info["setting"]["fps"] = 0
-                elif _n == 3:
-                    global_info["setting"]["animation_speed"] += 1
-                    if global_info["setting"]["animation_speed"] >= 16:
-                        global_info["setting"]["animation_speed"] = 0
-                elif _n == 4:
-                    global_info["setting"]["log_level"] += 1
-                    if global_info["setting"]["log_level"] >= 4:
-                        global_info["setting"]["log_level"] = 0
-                elif _n == 5:
-                    threading.Thread(target=process_background).start()
-                elif _n == 6:
-                    threading.Thread(target=enter_to_editor).start()
-        else:
-            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        if _n == 0:
-            _text += "（发现新版本）" if global_info["new_version"] else ""
-        if _n == 1:
-            _text += str(global_info["setting"]["max_selector_num"])
-        elif _n == 2:
-            _text += str(global_info["setting"]["fps"]) + "Hz" if global_info["setting"]["fps"] else "无限制"
-        elif _n == 3:
-            _text += str(global_info["setting"]["animation_speed"]) if global_info["setting"]["animation_speed"] else "关"
-        elif _n == 4:
-            if global_info["setting"]["log_level"] == 0:
-                _text += "禁用"
-            elif global_info["setting"]["log_level"] == 1:
-                _text += "错误"
-            elif global_info["setting"]["log_level"] == 2:
-                _text += "警告"
-            elif global_info["setting"]["log_level"] == 3:
-                _text += "信息"
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blits(((global_asset["config"], (20, _y)), (_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))))
-
-    _root.blit(_mask, (0, 0))
+    change_button_alpha(_info["button_state"], _id)
 
     return _root
-
-def process_background():
-    try:
-        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")]):
-            pygame.image.save(pygame.transform.smoothscale(pygame.image.load(_path), global_info["display_size"]), "Asset/image/custom_menu_background.png")
-            shutil.rmtree("Cache/image")
-            global_info["message"].append("已成功设置背景，重启软件生效！")
-    except:
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
-        global_info["message"].append("无法加载图片文件！")
-
-def set_selector_num(_num: None | int=None) -> None:
-    if _num is None:
-        global_info["message"].append("请输入最多压缩到单条指令内的时间项数！")
-        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_selector_num"], "text": "", "callback": set_selector_num, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
-    else:
-        if _num is not None:
-            remove_page(overlay_page)
-            if _num >= 2:
-                global_info["setting"]["max_selector_num"] = _num
-            else:
-                global_info["setting"]["max_selector_num"] = 2
-                global_info["message"].append("单条指令内的时间项数至少为2个！")
-
-def show_version_list():
-    add_page(overlay_page, [version_list_screen, {"index": 0, "state": [], "config": [["", 0], ["◀                                                                                                                    ", 0], ["                                                                                                                    ▶", 0], ["查看该版本详情", 0], ["下载并安装该版本", 0]]}])
 
 def version_list_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
     if global_info["update_list"]:
-        _root = pygame.Surface(global_info["display_size"]).convert_alpha()
-        _mask = global_asset["menu"].copy()
-        _root.blit(global_asset["blur"], (0, 0))
+        _root, _id = ui_manager.apply_ui(
+            (
+                (0.025, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][0]), 0),
+                (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][1]), 1),
+                (0.1, 0.044, 0.8, 0.089, ("V" + str(global_info["update_list"][_info["index"]]["version"]) + ("-" + str(global_info["update_list"][_info["index"]]["edition"]) if global_info["update_list"][_info["index"]]["edition"] else ""), 0.035, 255), -1),
+                (0.025, 0.178, 0.95, 0.089, ("查看版本详情", 0.035, _info["button_state"][2]), 2),
+                (0.025, 0.311, 0.95, 0.089, ("立即下载并安装", 0.035, _info["button_state"][3]), 3)
+            ),
+            pygame.mouse.get_pos()
+        )
 
-        mouse_position = pygame.mouse.get_pos()
+        if "mouse_left" in _input and not _input["mouse_left"]:
+            match _id:
+                case 0:
+                    _info["index"] -= 1
+                    if _info["index"] < 0:
+                        _info["index"] = len(global_info["update_list"]) - 1
+                case 1:
+                    _info["index"] += 1
+                    if _info["index"] >= len(global_info["update_list"]):
+                        _info["index"] = 0
+                case 2:
+                    if global_info["update_list"][_info["index"]]["description_url"]: webbrowser.open(global_info["update_list"][_info["index"]]["description_url"])
+                case 3:
+                    _ver_info = global_info["update_list"][_info["index"]]
+                    show_download(
+                        ("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]),
+                        _ver_info["download_url"],
+                        _ver_info["hash"],
+                        reboot_to_update
+                    )
 
-        _y = 20
-
-        for _n, _i in enumerate(_info["config"]):
-            if _n > 2:
-                _y += 60
-            if _y <= mouse_position[1] <= _y + 40 and (((80 <= mouse_position[0] <= 720 and _n == 0) or (20 <= mouse_position[0] <= 780 and _n > 2)) or ((20 <= mouse_position[0] <= 80 and _n == 1) or (720 <= mouse_position[0] <= 780 and _n == 2))):
-                _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-                if "mouse_left" in _input and not _input["mouse_left"]:
-                    if _n == 1:
-                        _info["index"] -= 1
-                        if _info["index"] < 0:
-                            _info["index"] = len(global_info["update_list"]) - 1
-                    elif _n == 2:
-                        _info["index"] += 1
-                        if _info["index"] >= len(global_info["update_list"]):
-                            _info["index"] = 0
-                    elif _n == 3 and global_info["update_list"][_info["index"]]["description_url"]:
-                        webbrowser.open(global_info["update_list"][_info["index"]]["description_url"])
-                    elif _n == 4:
-                        _info = global_info["update_list"][_info["index"]]
-                        show_download(
-                            ("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_info["version"]),
-                            _info["download_url"],
-                            _info["hash"],
-                            reboot_to_update
-                        )
-            else:
-                _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-            if _n == 0:
-                _i[1] = 255
-                _i[0] = "V" + str(global_info["update_list"][_info["index"]]["version"]) + ("-" + str(global_info["update_list"][_info["index"]]["edition"]) if global_info["update_list"][_info["index"]]["edition"] else "")
-            if _n >= 2:
-                _root.blit(global_asset["config"], (20, _y))
-            _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-            _text_surface = to_alpha(global_asset["font"].render(_i[0], True, (255, 255, 255)), (255, 255, 255, _i[1]))
-            _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))
-
-        _root.blit(_mask, (0, 0))
+        change_button_alpha(_info["button_state"], _id)
     else:
-        _root = global_asset["blur"].copy()
+        _root = ui_manager.get_blur_background()
         _text_surface = global_asset["font"].render("无法获取版本信息", True, (255, 255, 255))
-        _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, (global_info["display_size"][1] - _text_surface.get_size()[1]) / 2))
+        _text_position = ui_manager.get_real_position((0.5, 0.5), True)
+        _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
 
     return _root
 
-def show_download(_title: str, _url: str, _hash: str, _callback=lambda: remove_page(overlay_page)):
-    _state = {"state": 0, "downloaded": 0, "total": 0}
-    threading.Thread(target=download, args=(_url, _state, _hash)).start()
-    add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "time": 0, "done": False, "callback": _callback}])
+def about_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        remove_page(overlay_page)
+
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.267, ("", 0, 0), -1),
+            (0.025, 0.267, 0.95, 0, (_info["edition"], 0.035, 255), -1),
+            (0.025, 0.356, 0.95, 0.1, ("交流群(密码14890357)", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.489, 0.95, 0.1, ("MMS-NEXT 开源仓库", 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.622, 0.95, 0.1, ("MMS 开源仓库", 0.035, _info["button_state"][2]), 2)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        if _id == 0:
+            webbrowser.open("qm.qq.com/q/9oBhTyDN8k")
+        elif _id == 1:
+            webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure_next")
+        elif _id == 2:
+            webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure")
+
+    change_button_alpha(_info["button_state"], _id)
+
+    _root.blit(global_asset["logo"], ui_manager.get_real_position((0.155, 0.062), True))
+
+    return _root
 
 def download_screen(_info, _input):
     if _info["state"]["state"] == -1 and _info["time"] != -1:
@@ -1323,324 +1155,104 @@ def download_screen(_info, _input):
         remove_page(overlay_page)
         _info["time"] = -1
 
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
-
-    _y = 20
-
-    for _n in range(2):
-        if _n == 0:
-            _text = _info["title"]
-        else:
-            if _info["state"]["state"] == 0:
-                _text = str(round_45((_info["state"]["downloaded"] / _info["state"]["total"]) * 100, 2)) + "%" if _info["state"]["total"] else "等待中"
-            elif _info["state"]["state"] == 1:
-                _text = "正在解压"
-            elif _info["state"]["state"] == 2:
-                _text = "解压完成"
-                if not _info["done"]:
-                    _info["callback"]()
-                    _info["done"] = True
-            elif _info["state"]["state"] == -1:
-                _text = "下载失败，请重试"
-            else:
-                _text = ""
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = global_asset["font"].render(_text, True, (255, 255, 255))
-        _root.blits(((global_asset["config"], (20, _y)), (_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))))
-        _y += 60
-
-    _root.blit(_mask, (0, 0))
-
-    return _root
-
-def reboot_to_update():
-    global_info["exit"] = 2
-
-def start_install_editor():
-    remove_page(overlay_page)
-    threading.Thread(target=install_editor).start()
-
-def install_editor():
-    try:
-        if os.path.exists("Editor"):
-            global_info["log"].append("[W] \"Editor\" Directory Will be Removed!")
-            shutil.rmtree("Editor")
-        shutil.move("Cache/extracted", "Editor")
-        enter_to_editor()
-    except:
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
-
-def enter_to_editor():
-    add_page(overlay_page, [processing_screen, {}])
-    _remove = True
-    try:
-        _installed = False
-        if not os.path.exists("Editor"):
-            _installed = True
-        elif os.path.exists("Editor/metadata.json"):
-            with open("Editor/metadata.json", "rb") as _io:
-                _meta_data = json.loads(_io.read())
-            _installed = global_info["editor_update"] and _meta_data["version"] < global_info["editor_update"]["version"]
-        else:
-            _installed = True
-
-        if _installed:
-            if global_info["editor_update"]:
-                _remove = False
-                remove_page(overlay_page)
-                show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], global_info["editor_update"]["hash"], start_install_editor)
-            else:
-                global_info["message"].append("无法获取编辑器版本信息，请稍后再试！")
-        else:
-            subprocess.Popen("Editor/ProfileEditor.exe").wait()
-            load_profile()
-            global_info["message"].append("已重新加载配置文件！")
-    except:
-        global_info["message"].append("无法启动编辑器，请重试！")
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
-    finally:
-        if _remove:
-            remove_page(overlay_page)
-
-def show_about():
-    if global_info["setting"]["version"]:
-        _edition = "V" + str(global_info["setting"]["version"])
+    if _info["state"]["state"] == 0:
+        _text = str(round_45((_info["state"]["downloaded"] / _info["state"]["total"]) * 100, 2)) + "%" if \
+        _info["state"]["total"] else "等待中"
+    elif _info["state"]["state"] == 1:
+        _text = "正在解压"
+    elif _info["state"]["state"] == 2:
+        _text = "解压完成"
+        if not _info["done"]:
+            _info["callback"]()
+            _info["done"] = True
+    elif _info["state"]["state"] == -1:
+        _text = "下载失败，请重试"
     else:
-        _edition = "Unknown"
-    if global_info["setting"]["edition"]:
-        _edition += "-" + str(global_info["setting"]["edition"])
-    add_page(overlay_page, [about_screen, {"text": [["", 0, 0], ["", 0, 0], [_edition, 0, 0], ["交流群(密码14890357)", 0, 20], ["MMS-NEXT 开源仓库", 0, 20], ["MMS 开源仓库", 0, 20]]}])
+        _text = ""
 
-def about_screen(_info, _input):
-    if "mouse_right" in _input and not _input["mouse_right"]:
-        remove_page(overlay_page)
-
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
-
-    mouse_position = pygame.mouse.get_pos()
-
-    _y = 20
-    for _n, _i in enumerate(_info["text"]):
-        _y += _i[2]
-        if _i[2]:
-            if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-                _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-                if "mouse_left" in _input and not _input["mouse_left"]:
-                    if _n == 3:
-                        webbrowser.open("qm.qq.com/q/9oBhTyDN8k")
-                    elif _n == 4:
-                        webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure_next")
-                    elif _n == 5:
-                        webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure")
-            else:
-                _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        else:
-            _i[1] = 255
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = to_alpha(global_asset["font"].render(_i[0], True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blits(((global_asset["config"], (20, _y)), (_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))))
-        _y += 40
-
-    _root.blit(global_asset["logo"], (120, 28))
-
-    _root.blit(_mask, (0, 0))
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, (_info["title"], 0.035, 255), -1),
+            (0.025, 0.177, 0.95, 0.089, (_text, 0.035, 255), -1)
+        ),
+        pygame.mouse.get_pos()
+    )
 
     return _root
-
-def ask_file():
-    threading.Thread(target=open_filedialog).start()
-
-def open_filedialog():
-    try:
-        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("MIDI Files", ".mid")]):
-            global_info["convertor"]["file"] = _path
-            if os.path.exists(os.path.splitext(_path)[0] + ".lrc"):
-                global_info["message"].append("检测到同名的.lrc文件，启用歌词显示即可加载歌词！")
-            else:
-                global_info["message"].append("未检测到同名的.lrc文件，若启用歌词显示将尝试从MIDI中获取")
-    except:
-        global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
-
-def ask_setting():
-    if global_info["convertor"]["output_format"] == -1:
-        global_info["convertor"]["output_format"] = 0
-    add_page(overlay_page, [setting_screen, {"config": [["输出格式 ", 0], ["播放模式 ", 0], ["平均音量 ", 0], ["结构模板 ", 0]]}])
 
 def setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("输出格式" + ["mcstructure", "mcfunction"][global_info["convertor"]["output_format"]], 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("播放模式" + ["命令链延迟", "计分板时钟", "时钟与编号"][global_info["convertor"]["command_type"]], 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("平均音量 " + (str(global_info["convertor"]["volume"]) + "%" if global_info["convertor"]["volume"] else "保持原始音量"), 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.444, 0.95, 0.089, ("结构模板 " + os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0] if global_info["convertor"]["output_format"] == 0 and global_asset["structure"] else "不可用", 0.035, _info["button_state"][3]), 3)
+        ),
+        pygame.mouse.get_pos()
+    )
 
-    mouse_position = pygame.mouse.get_pos()
+    change_button_alpha(_info["button_state"], _id)
 
-    for _n, _i in enumerate(_info["config"]):
-        _y = 20 + _n * 60
-        if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                if _n == 0:
-                    if global_info["convertor"]["output_format"] == 0 or global_info["convertor"]["edition"] == 1:
-                        global_info["convertor"]["output_format"] = 1
-                        if global_info["convertor"]["command_type"] == 0:
-                            global_info["convertor"]["command_type"] = 1
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                if global_info["convertor"]["output_format"] == 0 or global_info["convertor"]["edition"] == 1:
+                    global_info["convertor"]["output_format"] = 1
+                    if global_info["convertor"]["command_type"] == 0:
+                        global_info["convertor"]["command_type"] = 1
+                else:
+                    global_info["convertor"]["output_format"] = 0
+            case 1:
+                global_info["convertor"]["command_type"] += 1
+                if global_info["convertor"]["command_type"] >= 3:
+                    if global_info["convertor"]["output_format"] == 0:
+                        global_info["convertor"]["command_type"] = 0
                     else:
-                        global_info["convertor"]["output_format"] = 0
-                elif _n == 1:
-                    global_info["convertor"]["command_type"] += 1
-                    if global_info["convertor"]["command_type"] >= 3:
-                        if global_info["convertor"]["output_format"] == 0:
-                            global_info["convertor"]["command_type"] = 0
-                        else:
-                            global_info["convertor"]["command_type"] = 1
-                elif _n == 2:
-                    global_info["convertor"]["volume"] += 10
-                    if global_info["convertor"]["volume"] >= 110:
-                        global_info["convertor"]["volume"] = 0
-                elif _n == 3 and global_info["convertor"]["output_format"] == 0:
-                    global_info["convertor"]["structure"] += 1
-                    if global_info["convertor"]["structure"] >= len(global_asset["structure"]):
-                        global_info["convertor"]["structure"] = 0
-
-                if global_info["convertor"]["output_format"] == 0:
-                    global_info["convertor"]["compression"] = False
-        else:
-            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        _root.blit(global_asset["config"], (20, _y))
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text = _i[0]
-        if _n == 0:
-            if global_info["convertor"]["output_format"] == 0:
-                _text += "mcstructure"
-            elif global_info["convertor"]["output_format"] == 1:
-                _text += "mcfunction"
-        elif _n == 1:
-            if global_info["convertor"]["command_type"] == 0:
-                _text += "命令链延迟"
-            elif global_info["convertor"]["command_type"] == 1:
-                _text += "计分板时钟"
-            elif global_info["convertor"]["command_type"] == 2:
-                _text += "时钟与编号"
-        elif _n == 2:
-            if global_info["convertor"]["volume"]:
-                _text += str(global_info["convertor"]["volume"]) + "%"
-            else:
-                _text += "保持原始音量"
-        elif _n == 3:
-            if global_info["convertor"]["output_format"] != 0:
-                _text += "不可用"
-            elif global_asset["structure"]:
-                _text += os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0]
-            else:
-                _text += "无"
-        _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))
-
-    _root.blit(_mask, (0, 0))
+                        global_info["convertor"]["command_type"] = 1
+            case 2:
+                global_info["convertor"]["volume"] += 10
+                if global_info["convertor"]["volume"] >= 110:
+                    global_info["convertor"]["volume"] = 0
+            case 3:
+                if global_info["convertor"]["output_format"] == 0:global_info["convertor"]["structure"] += 1
+                if global_info["convertor"]["structure"] >= len(global_asset["structure"]): global_info["convertor"]["structure"] = 0
+        if global_info["convertor"]["output_format"] == 0: global_info["convertor"]["compression"] = False
 
     return _root
-
-def ask_other_setting():
-    if global_info["convertor"]["time_per_tick"] == -1:
-        global_info["convertor"]["time_per_tick"] = 50
-    add_page(overlay_page, [other_setting_screen, {"config": [["播放速度 ", 0], ["声相偏移 ", 0], ["静音跳过 ", 0], ["打击乐器 ", 0], ["乐器调整 ", 0], ["歌词显示设置", 0], ["指令压缩  ", 0]]}])
 
 def other_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("播放速度 " + str(global_info["convertor"]["time_per_tick"]) + "ms/tick", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("声相偏移 " + ("启用" if global_info["convertor"]["panning"] else "关闭"), 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("静音跳过 " + ("启用" if global_info["convertor"]["skip"] else "关闭"), 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.444, 0.95, 0.089, ("打击乐器 " + ("保留" if global_info["convertor"]["percussion"] else "去除"), 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.578, 0.95, 0.089, ("乐器调整 " + ("启用" if global_info["convertor"]["adjustment"] else "关闭"), 0.035, _info["button_state"][4]), 4),
+            (0.025, 0.711, 0.95, 0.089, ("歌词字幕设置", 0.035, _info["button_state"][5]), 5),
+            (0.025, 0.844, 0.95, 0.089, ("指令压缩 " + ("不可用" if global_info["convertor"]["command_type"] == 0 or (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0) else ("启用" if global_info["convertor"]["compression"] else "关闭")), 0.035, _info["button_state"][6]), 6)
+        ),
+        pygame.mouse.get_pos()
+    )
 
-    mouse_position = pygame.mouse.get_pos()
+    change_button_alpha(_info["button_state"], _id)
 
-    for _n, _i in enumerate(_info["config"]):
-        _y = 20 + _n * 60
-        _text = _i[0]
-        if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                if _n == 0:
-                    set_time_per_tick()
-                elif _n == 1:
-                    if global_info["convertor"]["panning"]:
-                        global_info["convertor"]["panning"] = False
-                    else:
-                        global_info["convertor"]["panning"] = True
-                elif _n == 2:
-                    if global_info["convertor"]["skip"]:
-                        global_info["convertor"]["skip"] = False
-                    else:
-                        global_info["convertor"]["skip"] = True
-                elif _n == 3:
-                    if global_info["convertor"]["percussion"]:
-                        global_info["convertor"]["percussion"] = False
-                    else:
-                        global_info["convertor"]["percussion"] = True
-                elif _n == 4:
-                    if global_info["convertor"]["adjustment"]:
-                        global_info["convertor"]["adjustment"] = False
-                    else:
-                        global_info["convertor"]["adjustment"] = True
-                elif _n == 5:
-                    add_page(overlay_page, [lyrics_setting_screen, {"config": [["歌词显示 ", 0], ["平滑进度 ", 0], ["自动合并 ", 0]]}])
-                elif _n == 6:
-                    if global_info["convertor"]["compression"] or (global_info["convertor"]["command_type"] == 0 or (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0)):
-                        global_info["convertor"]["compression"] = False
-                    else:
-                        global_info["convertor"]["compression"] = True
-            if _n == 5:
-                if global_info["convertor"]["lyrics"]["enable"]:
-                    _text = ""
-                    if global_info["convertor"]["lyrics"]["smooth"]:
-                        _text += "/平滑进度"
-                    if global_info["convertor"]["lyrics"]["joining"]:
-                        _text += "/自动合并"
-                    if _text:
-                        _text = _text[1:]
-                    else:
-                        "歌词显示已启用"
-                else:
-                    _text = "歌词显示已关闭"
-        else:
-            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        if _n == 0:
-            _text += str(global_info["convertor"]["time_per_tick"]) + "ms/tick"
-        elif _n == 1:
-            if global_info["convertor"]["panning"]:
-                _text += "启用"
-            else:
-                _text += "关闭"
-        elif _n == 2:
-            if global_info["convertor"]["skip"]:
-                _text += "启用"
-            else:
-                _text += "关闭"
-        elif _n == 3:
-            if global_info["convertor"]["percussion"]:
-                _text += "启用"
-            else:
-                _text += "关闭"
-        elif _n == 4:
-            if global_info["convertor"]["adjustment"]:
-                _text += "启用"
-            else:
-                _text += "关闭"
-        elif _n == 6:
-            if global_info["convertor"]["compression"]:
-                _text += "启用"
-            elif global_info["convertor"]["command_type"] == 0 or (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0):
-                _text += "不可用"
-            else:
-                _text += "关闭"
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blits(((global_asset["config"], (20, _y)), (_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))))
-
-    _root.blit(_mask, (0, 0))
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0: set_time_per_tick()
+            case 1: global_info["convertor"]["panning"] = not global_info["convertor"]["panning"]
+            case 2: global_info["convertor"]["skip"] = not global_info["convertor"]["skip"]
+            case 3: global_info["convertor"]["percussion"] = not global_info["convertor"]["percussion"]
+            case 4: global_info["convertor"]["adjustment"] = not global_info["convertor"]["adjustment"]
+            case 5: add_page(overlay_page, [lyrics_setting_screen, {"button_state": [0, 0, 0]}])
+            case 6:
+                if global_info["convertor"]["command_type"] != 0 and not (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0):
+                    global_info["convertor"]["compression"] = not global_info["convertor"]["compression"]
 
     return _root
 
@@ -1648,248 +1260,148 @@ def lyrics_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("歌词显示 " + ("启用" if global_info["convertor"]["lyrics"]["enable"] else "关闭"), 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("平滑进度 " + ("启用" if global_info["convertor"]["lyrics"]["smooth"] else "关闭"), 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("自动分割 " + ("启用" if global_info["convertor"]["lyrics"]["joining"] else "关闭"), 0.035, _info["button_state"][2]), 2)
+        ),
+        pygame.mouse.get_pos()
+    )
 
-    mouse_position = pygame.mouse.get_pos()
+    change_button_alpha(_info["button_state"], _id)
 
-    for _n, _i in enumerate(_info["config"]):
-        _y = 20 + _n * 60
-        if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                if _n == 0:
-                    if global_info["convertor"]["lyrics"]["enable"]:
-                        global_info["convertor"]["lyrics"]["enable"] = False
-                    else:
-                        global_info["convertor"]["lyrics"]["enable"] = True
-                elif _n == 1:
-                    if global_info["convertor"]["lyrics"]["smooth"]:
-                        global_info["convertor"]["lyrics"]["smooth"] = False
-                    else:
-                        global_info["convertor"]["lyrics"]["smooth"] = True
-                elif _n == 2:
-                    if global_info["convertor"]["lyrics"]["joining"]:
-                        global_info["convertor"]["lyrics"]["joining"] = False
-                    else:
-                        global_info["convertor"]["lyrics"]["joining"] = True
-        else:
-            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        _text = _i[0]
-        if _n == 0:
-            if global_info["convertor"]["lyrics"]["enable"]:
-                _text += "启用"
-            else:
-                _text += "关闭"
-        elif _n == 1:
-            if global_info["convertor"]["lyrics"]["smooth"]:
-                _text += "启用"
-            else:
-                _text += "关闭"
-        elif _n == 2:
-            if global_info["convertor"]["lyrics"]["joining"]:
-                _text += "启用"
-            else:
-                _text += "关闭"
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blits(((global_asset["config"], (20, _y)), (_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))))
-
-    _root.blit(_mask, (0, 0))
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                global_info["convertor"]["lyrics"]["enable"] = not global_info["convertor"]["lyrics"]["enable"]
+            case 1:
+                global_info["convertor"]["lyrics"]["smooth"] = not global_info["convertor"]["lyrics"]["smooth"]
+            case 2:
+                global_info["convertor"]["lyrics"]["joining"] = not global_info["convertor"]["lyrics"]["joining"]
 
     return _root
-
-def set_time_per_tick(_time: None | int=None) -> None:
-    if _time is None:
-        global_info["message"].append("请输入每游戏刻的时间！")
-        add_page(overlay_page, [keyboard_screen, {"value": global_info["convertor"]["time_per_tick"], "text": "ms/tick", "callback": set_time_per_tick, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
-    else:
-        if _time is not None:
-            remove_page(overlay_page)
-            global_info["convertor"]["time_per_tick"] = _time
-
-def ask_edition():
-    if global_info["convertor"]["edition"] == -1:
-        global_info["convertor"]["edition"] = 0
-    add_page(overlay_page, [game_edition_screen, {"config": [[0], [0]]}])
 
 def game_edition_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    _root = global_asset["blur"].copy()
-    _mask = global_asset["menu"].copy()
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("游戏版本 " + ["基岩版", "Java版"][global_info["convertor"]["edition"]], 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("指令语法 " + ["1.19.50/1.13以下", "1.19.50/1.13以上"][global_info["convertor"]["version"]], 0.035, _info["button_state"][1]), 1)
+        ),
+        pygame.mouse.get_pos()
+    )
 
-    mouse_position = pygame.mouse.get_pos()
+    change_button_alpha(_info["button_state"], _id)
 
-    for _n, _i in enumerate(_info["config"]):
-        _y = 20 + _n * 60
-        if _y <= mouse_position[1] <= _y + 40 and 20 <= mouse_position[0] <= 780:
-            _i[0] += (255 - _i[0]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                if _n == 0:
-                    if global_info["convertor"]["edition"] == 0:
-                        global_info["convertor"]["edition"] = 1
-                        global_info["convertor"]["output_format"] = 1
-                        if global_info["convertor"]["command_type"] == 0:
-                            global_info["convertor"]["command_type"] = 1
-                    else:
-                        global_info["convertor"]["edition"] = 0
-                elif _n == 1:
-                    if global_info["convertor"]["version"] == 0:
-                        global_info["convertor"]["version"] = 1
-                    else:
-                        global_info["convertor"]["version"] = 0
-
-                if global_info["convertor"]["version"] == 0 and global_info["convertor"]["edition"] == 1:
-                    global_info["convertor"]["compression"] = False
-        else:
-            _i[0] += (127 - _i[0]) * global_info["animation_speed"]
-        _text = ""
-        if _n == 0:
-            if global_info["convertor"]["edition"] == 0:
-                _text = "基岩版"
-            elif global_info["convertor"]["edition"] == 1:
-                _text = "Java版"
-        elif _n == 1:
-            if global_info["convertor"]["version"] == 0:
-                _text = "1.19.50/1.13以下"
-            elif global_info["convertor"]["version"] == 1:
-                _text = "1.19.50/1.13以上"
-        _mask = to_alpha(_mask, (0, 0, 0, 0), (760, 40), (20, _y))
-        _text_surface = to_alpha(global_asset["font"].render(_text, True, (255, 255, 255)), (255, 255, 255, _i[0]))
-        _root.blits(((global_asset["config"], (20, _y)), (_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, _y + 20 - _text_surface.get_size()[1] / 2))))
-
-    _root.blit(_mask, (0, 0))
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                if global_info["convertor"]["edition"] == 0:
+                    global_info["convertor"]["edition"] = 1
+                    global_info["convertor"]["output_format"] = 1
+                    if global_info["convertor"]["command_type"] == 0:
+                        global_info["convertor"]["command_type"] = 1
+                else:
+                    global_info["convertor"]["edition"] = 0
+            case 1:
+                if global_info["convertor"]["version"] == 0:
+                    global_info["convertor"]["version"] = 1
+                else:
+                    global_info["convertor"]["version"] = 0
+        if global_info["convertor"]["version"] == 0 and global_info["convertor"]["edition"] == 1:
+            global_info["convertor"]["compression"] = False
 
     return _root
-
-def start_task(_id: None | int=None) -> None:
-    if not global_info["convertor"]["file"]:
-        return
-    if global_info["convertor"]["edition"] == -1:
-        return
-    if global_info["convertor"]["output_format"] == -1:
-        return
-    if global_info["convertor"]["time_per_tick"] == -1:
-        return
-
-    if global_info["convertor"]["command_type"] == 2 and _id is None:
-        global_info["message"].append("请输入编号！")
-        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["id"], "text": "", "callback": start_task, "button": [["1", 0], ["2", 0], ["3", 0], ["0", 0], ["4", 0], ["5", 0], ["6", 0], ["清除", 0], ["7", 0], ["8", 0], ["9", 0], ["确认", 0]]}])
-    else:
-        if _id is not None:
-            remove_page(overlay_page)
-            global_info["setting"]["id"] = _id
-
-        _argument = global_info["convertor"].copy()
-        _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
-        threading.Thread(target=convertor, args=(_argument, _id)).start()
 
 def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
+        _info["callback"](_info["value"])
 
-    _root = global_asset["kb_background"].copy()
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.256, 0.8, 0.089, (str(_info["value"]) + _info["text"], 0.035, 255), -1),
+            (0.85, 0.256, 0.05, 0.089, ("←", 0.035, _info["button_state"][10]), 10),
+            (0.925, 0.256, 0.05, 0.089, ("C", 0.035, _info["button_state"][11]), 11),
+            (0.025, 0.389, 0.219, 0.089, ("1", 0.035, _info["button_state"][1]), 1),
+            (0.269, 0.389, 0.219, 0.089, ("2", 0.035, _info["button_state"][2]), 2),
+            (0.513, 0.389, 0.219, 0.089, ("3", 0.035, _info["button_state"][3]), 3),
+            (0.756, 0.389, 0.219, 0.089, ("+1", 0.035, _info["button_state"][12]), 12),
+            (0.025, 0.522, 0.219, 0.089, ("4", 0.035, (_info["button_state"][4])), 4),
+            (0.269, 0.522, 0.219, 0.089, ("5", 0.035, _info["button_state"][5]), 5),
+            (0.513, 0.522, 0.219, 0.089, ("6", 0.035, _info["button_state"][6]), 6),
+            (0.756, 0.522, 0.219, 0.089, ("0", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.656, 0.219, 0.089, ("7", 0.035, _info["button_state"][7]), 7),
+            (0.269, 0.656, 0.219, 0.089, ("8", 0.035, _info["button_state"][8]), 8),
+            (0.513, 0.656, 0.219, 0.089, ("9", 0.035, _info["button_state"][9]), 9),
+            (0.756, 0.656, 0.219, 0.089, ("-1", 0.035, _info["button_state"][13]), 13)
+        ),
+        pygame.mouse.get_pos()
+    )
 
-    mouse_position = pygame.mouse.get_pos()
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case _n if 0 <= _n <= 9:
+                _info["value"] *= 10
+                _info["value"] += _id
+            case 10:
+                _info["value"] //= 10
+            case 11:
+                _info["value"] = 0
+            case 12:
+                _info["value"] += 1
+            case 13:
+                _info["value"] -= 1
 
-    _text_surface = global_asset["font"].render(str(_info["value"]) + _info["text"], True, (255, 255, 255))
-    _root.blit(_text_surface, ((global_info["display_size"][0] - _text_surface.get_size()[0]) / 2, 135 - _text_surface.get_size()[1] / 2))
-
-    for _n, _i in enumerate(_info["button"]):
-        _x = 20 + (_n % 4) * 190 + (20 if (_n + 1) % 4 == 0 else 0)
-        _y = 175 + (_n // 4) * 60
-        if _x < mouse_position[0] < _x + 170 and _y <= mouse_position[1] <= _y + 40:
-            _i[1] += (255 - _i[1]) * global_info["animation_speed"]
-            if "mouse_left" in _input and not _input["mouse_left"]:
-                if _n == 0:
-                    _info["value"] *= 10
-                    _info["value"] += 1
-                elif _n == 1:
-                    _info["value"] *= 10
-                    _info["value"] += 2
-                elif _n == 2:
-                    _info["value"] *= 10
-                    _info["value"] += 3
-                elif _n == 3:
-                    _info["value"] *= 10
-                elif _n == 4:
-                    _info["value"] *= 10
-                    _info["value"] += 4
-                elif _n == 5:
-                    _info["value"] *= 10
-                    _info["value"] += 5
-                elif _n == 6:
-                    _info["value"] *= 10
-                    _info["value"] += 6
-                elif _n == 7:
-                    _info["value"] = 0
-                elif _n == 8:
-                    _info["value"] *= 10
-                    _info["value"] += 7
-                elif _n == 9:
-                    _info["value"] *= 10
-                    _info["value"] += 8
-                elif _n == 10:
-                    _info["value"] *= 10
-                    _info["value"] += 9
-                elif _n == 11:
-                    _info["callback"](_info["value"])
-
-                if _info["value"] > 2147483648:
-                    _info["value"] = 2147483648
-        else:
-            _i[1] += (127 - _i[1]) * global_info["animation_speed"]
-        _text_surface = to_alpha(global_asset["font"].render(_i[0], True, (255, 255, 255)), (255, 255, 255, _i[1]))
-        _root.blit(_text_surface, (_x - _text_surface.get_size()[0] / 2 + 85, _y - _text_surface.get_size()[1] / 2 + 20))
+    change_button_alpha(_info["button_state"], _id)
 
     return _root
 
 def processing_screen(_info, _input):
-    return global_asset["blur"].copy()
+    return ui_manager.get_blur_background()
 
-global_info = {"exit": 0, "watch_dog": 0, "log": [], "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "editor_update": {}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
-overlay_page = []
+global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "editor_update": {}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list] = {}
+overlay_page = []
+
+logger = log.Logger(5)
 
 pygame.display.init()
-
-global_info["display_size"] = (800, 450)
-
 pygame.display.set_caption("MIDI-MCSTRUCTURE NEXT  GUI")
+pygame.display.set_icon(pygame.image.load("Asset/image/icon.ico"))
+window = pygame.display.set_mode((800, 450), pygame.RESIZABLE)
 
-try:
-    pygame.display.set_icon(pygame.image.load("Asset/image/icon.ico"))
-except:
-    global_info["log"].extend(("[W] " + line for line in traceback.format_exc().splitlines()))
-
-window = pygame.display.set_mode(global_info["display_size"])
+ui_manager = UIManager()
 
 try:
     timer = pygame.time.Clock()
 
-    threading.Thread(target=asset_load).start()
-
     threading.Thread(target=watchdog).start()
+    threading.Thread(target=asset_load).start()
 
     while not global_info["exit"]:
         window.fill((0, 0, 0, 255))
 
         env_list = {}
-        for env in pygame.event.get():
-            if env.type == pygame.QUIT:
+        for evt in pygame.event.get():
+            if evt.type == pygame.QUIT:
                 global_info["exit"] = 1
-            if env.type == pygame.MOUSEBUTTONDOWN:
-                if env.button == 1:
+            elif evt.type == pygame.MOUSEBUTTONDOWN:
+                if evt.button == 1:
                     env_list["mouse_left"] = True
-                if env.button == 3:
+                if evt.button == 3:
                     env_list["mouse_right"] = True
-            if env.type == pygame.MOUSEBUTTONUP:
-                if env.button == 1:
+            elif evt.type == pygame.MOUSEBUTTONUP:
+                if evt.button == 1:
                     env_list["mouse_left"] = False
-                if env.button == 3:
+                if evt.button == 3:
                     env_list["mouse_right"] = False
+            elif evt.type == pygame.VIDEORESIZE:
+                threading.Thread(target=change_size, args=[(evt.w, evt.h), True]).start()
+                window = pygame.display.set_mode((evt.w, evt.h), pygame.RESIZABLE)
 
         global_info["animation_speed"] = timer.get_fps()
         if 0 < global_info["setting"]["animation_speed"] < global_info["animation_speed"]:
@@ -1908,9 +1420,10 @@ except KeyboardInterrupt:
     global_info["exit"] = 1
 except:
     global_info["exit"] = 3
-    global_info["log"].extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+    logger.fatal(traceback.format_exc())
 finally:
-    save_log()
+    logger.done()
+    if global_info["exit"] != 3: pygame.quit()
 
     if not os.path.exists("Asset/text"):
         os.makedirs("Asset/text")
