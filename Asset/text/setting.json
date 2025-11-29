@@ -1,9 +1,9 @@
 {
-  "id": 0,
+  "id": 1,
   "fps": 60,
   "log_level": 5,
-  "version": 15251129,
-  "edition": "Alpha",
+  "version": 15251130,
+  "edition": "Beta",
   "animation_speed": 10,
   "max_selector_num": 8
 }

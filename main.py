@@ -43,8 +43,6 @@ def asset_load() -> None:
 
         pygame.init()
 
-        pygame.mixer.set_num_channels(24)
-
         if not os.path.exists("Asset/text/default_profile.json"):
             logger.info("Copy Backup Profile")
             shutil.copy("Asset/text/profile.json", "Asset/text/default_profile.json")
@@ -112,17 +110,17 @@ def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygam
         # 设置尺寸
         ui_manager.change_size(_size)
         # 加载错误界面
-        global_asset["error"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/error_background.png"), ui_manager.get_real_position((1, 1))).convert_alpha()
+        global_asset["error"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/error_background.png"), ui_manager.get_abs_position((1, 1))).convert_alpha()
         # 加载logo
-        global_asset["logo"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/logo.png"), ui_manager.get_real_position((0.7, 0.142))).convert_alpha()
+        global_asset["logo"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/logo.png"), ui_manager.get_abs_position((0.7, 0.142))).convert_alpha()
         # 加载启动遮罩背景
-        global_asset["loading_mask"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading_mask.png"), ui_manager.get_real_position((1, 1))).convert_alpha()
+        global_asset["loading_mask"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading_mask.png"), ui_manager.get_abs_position((1, 1))).convert_alpha()
         # 添加启动页面
         add_page(overlay_page, [loading_screen, {"progress": _progress, "alpha": 0}], 1)
         # 加载字体
-        global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", ui_manager.get_real_position((0, 0.062))[1])
+        global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", ui_manager.get_abs_position((0, 0.062))[1])
         # 加载消息背景
-        global_asset["message_mask"] = pygame.transform.scale(pygame.image.load("Asset/image/mask.png"), ui_manager.get_real_position((1, 0.089))).convert_alpha()
+        global_asset["message_mask"] = pygame.transform.scale(pygame.image.load("Asset/image/mask.png"), ui_manager.get_abs_position((1, 0.089))).convert_alpha()
         # 移除页面
         if _exit:
             time.sleep(0.3)
@@ -666,11 +664,11 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
     if global_info["message"]:
         global_info["message_info"][1] += timer.get_time()
 
-        _root.blit(global_asset["message_mask"], ui_manager.get_real_position((0, 1 - global_info["message_info"][0] * 0.089), True))
+        _root.blit(global_asset["message_mask"], ui_manager.get_abs_position((0, 1 - global_info["message_info"][0] * 0.089), True))
 
         _text_surface = to_alpha(global_asset["font"].render(global_info["message"][0], True, (255, 255, 255)), (255, 255, 255, 255 * global_info["message_info"][0]))
 
-        _text_position = ui_manager.get_real_position((1, 1.044 - global_info["message_info"][0] * 0.089))
+        _text_position = ui_manager.get_abs_position((1, 1.044 - global_info["message_info"][0] * 0.089))
         _root.blit(_text_surface, ((_text_position[0] - _text_surface.get_size()[0]) / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
 
         if global_info["message_info"][1] <= 3000:
@@ -756,7 +754,7 @@ def enter_to_editor():
     try:
         with open("Editor/metadata.json", "rb") as _io:
             _meta_data = json.loads(_io.read())
-        assert global_info["editor_update"] and _meta_data["version"] < global_info["editor_update"]["version"]
+        if global_info["editor_update"]: assert _meta_data["version"] >= global_info["editor_update"]["version"]
 
         subprocess.Popen("Editor/ProfileEditor.exe").wait()
         load_profile()
@@ -850,6 +848,7 @@ def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=Tr
             with open("Cache/download/" + _file_name, "rb") as _io:
                 for _data_chunk in iter(lambda: _io.read(4096), b""):
                     _file_hash.update(_data_chunk)
+
         if str(_file_hash.hexdigest()) != _target_hash or not _target_hash:
             if os.path.exists("Cache/download"):
                 logger.warn("Cache/download Will be Removed!")
@@ -886,19 +885,18 @@ def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=Tr
         logger.error(traceback.format_exc())
         _state["state"] = -1
     finally:
-        if _state["state"] != -1:
-            _state["state"] = 2
+        if _state["state"] != -1: _state["state"] = 2
 
 # 各种函数（用于GUI）
 def loading_screen(_info, _input) -> pygame.Surface:
     _surf = ui_manager.get_blur_background(True)
     if _info["progress"] is not None:
-        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_real_position((0.25, 0.733, 0.5, 0.053), True), 2)
-        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_real_position((0.255, 0.742, 0.49 * (_info["progress"][0] / _info["progress"][1]), 0.036), True), 0)
+        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_abs_position((0.25, 0.733, 0.5, 0.053), True), 2)
+        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_abs_position((0.255, 0.742, 0.49 * (_info["progress"][0] / _info["progress"][1]), 0.036), True), 0)
         if _info["progress"][0] == _info["progress"][1]:
             _info["alpha"] += (255 - _info["alpha"]) * global_info["animation_speed"]
             _surf = to_alpha(_surf, (255, 255, 255, round_45(_info["alpha"])))
-    _surf.blits(((global_asset["loading_mask"], ui_manager.get_real_position((0, 0), True)), (global_asset["logo"], ui_manager.get_real_position((0.15, 0.429), True))))
+    _surf.blits(((global_asset["loading_mask"], ui_manager.get_abs_position((0, 0), True)), (global_asset["logo"], ui_manager.get_abs_position((0.15, 0.429), True))))
     return _surf
 
 def menu_screen(_info, _input):
@@ -1114,7 +1112,7 @@ def version_list_screen(_info, _input):
     else:
         _root = ui_manager.get_blur_background()
         _text_surface = global_asset["font"].render("无法获取版本信息", True, (255, 255, 255))
-        _text_position = ui_manager.get_real_position((0.5, 0.5), True)
+        _text_position = ui_manager.get_abs_position((0.5, 0.5), True)
         _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
 
     return _root
@@ -1144,7 +1142,7 @@ def about_screen(_info, _input):
 
     change_button_alpha(_info["button_state"], _id)
 
-    _root.blit(global_asset["logo"], ui_manager.get_real_position((0.155, 0.062), True))
+    _root.blit(global_asset["logo"], ui_manager.get_abs_position((0.155, 0.062), True))
 
     return _root
 

@@ -40,6 +40,7 @@ class TempoList:
         for _i in self.tempo_list:
             if _i[0] == _time:
                 _i[1] = _tempo
+                break
         else:
             self.tempo_list.append([_time, _tempo])
         self.is_revised = True
@@ -52,15 +53,17 @@ class TempoList:
             self.tempo_list.sort(key=lambda _i: _i[0])
             self.is_revised = False
 
-        _real_time = 0
+        _tempo_list = self.tempo_list + [(float("INF"), self.tempo_list[-1][1])]
 
-        for _n in range(1, len(self.tempo_list)):
-            if self.tempo_list[_n][0] <= _time:
-                _real_time += mido.tick2second(self.tempo_list[_n][0] - self.tempo_list[_n - 1][0], self.ticks_per_beat, self.tempo_list[_n - 1][1]) * 1000
+        _abs_time = 0
+        for _n in range(1, len(_tempo_list)):
+            if _tempo_list[_n][0] <= _time:
+                _abs_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], self.ticks_per_beat, _tempo_list[_n - 1][1]) * 1000
             else:
-                _real_time += mido.tick2second(_time - self.tempo_list[_n - 1][0], self.ticks_per_beat, self.tempo_list[_n - 1][1]) * 1000
+                _abs_time += mido.tick2second(_time - _tempo_list[_n - 1][0], self.ticks_per_beat, _tempo_list[_n - 1][1]) * 1000
                 break
-        return _real_time
+
+        return _abs_time
 
 class LyricsList:
     def __init__(self, _lyrics_list: dict[int, str], _smooth: bool=True, _join: bool=False):
@@ -83,26 +86,29 @@ class LyricsList:
             # 判断除数是否为0
             if _average_delay_time[1]:
                 _average_delay_time = _average_delay_time[0] / _average_delay_time[1]
-                _step = _average_delay_time * 0.01
+                _step = _average_delay_time * 0.001
                 # 微调合并的间隔时间，避免出现太长的歌词
-                while True:
-                    # 检测是否存在过长的歌词
+                _scores = []
+                while _average_delay_time > 0:
+                    # 迭代最佳结果
                     _num = 0
+                    _result = []
                     _last_time = min(_time_list)
                     for _k in _time_list:
                         _lyrics_length = len(_lyrics_list[_k])
                         if _k - _last_time <= _average_delay_time and _lyrics_length < 16:
                             _num += _lyrics_length
                         else:
+                            _result.append(_num)
                             _num = 0
                         _last_time = _k
-                        # 如果存在过长的歌词就微调间隔时间并退出尝试下个间隔时间
-                        if _num >= 16:
-                            _average_delay_time -= _step
-                            break
-                    # 检测是否因为歌词过长而退出，如果不是就结束迭代
-                    if _num < 16:
-                        break
+                    if _num: _result.append(_num)
+                    # 计算得分
+                    _scores.append((_average_delay_time, sum(map(lambda _x: 0.209 * (_x ** 2) - 3.56 * _x, _result))))
+                    # 减去一个单位的时间
+                    _average_delay_time -= _step
+                # 取最好的结果
+                _average_delay_time = min(_scores, key=lambda _x: _x[1])[0]
                 # 合并歌词
                 _lyrics_text_buffer = ""
                 _last_time = min(_time_list)
@@ -113,8 +119,7 @@ class LyricsList:
                     _lyrics_text_buffer += _lyrics_list[_k]
                     _last_time = _k
                 # 处理剩余的一句歌词
-                if _lyrics_text_buffer:
-                    self.lyrics_list.append(_lyrics_text_buffer)
+                if _lyrics_text_buffer: self.lyrics_list.append(_lyrics_text_buffer)
         else:
             self.lyrics_list = list(_lyrics_list[_i] for _i in _time_list)
 
