@@ -75,7 +75,7 @@ class UIManager:
         self.__surf_cache["background"] = _background
         self.__surf_cache["blur"] = _blur_surf
 
-    def get_real_position(self, _position: tuple[int], _offset: bool = False) -> tuple[int]:
+    def get_abs_position(self, _position: tuple[int], _offset: bool = False) -> tuple[int]:
         return tuple(int(round_45(_i * self.__window_size[_n % 2]) + (self.__window_offset[_n % 2] if _offset else 0)) for _n, _i in enumerate(_position))
 
     def get_background(self) -> pygame.Surface:
@@ -83,7 +83,7 @@ class UIManager:
 
     def get_blur_background(self, _black_background: bool = False) -> pygame.Surface:
         _root = pygame.Surface(self.display_size).convert_alpha() if _black_background or "background" not in self.__surf_cache else self.__surf_cache["background"].copy()
-        if "blur" in self.__surf_cache: _root.blit(self.__surf_cache["blur"].subsurface(pygame.Rect(self.get_real_position((0, 0), True) + self.get_real_position((1, 1)))), self.get_real_position((0, 0), True))
+        if "blur" in self.__surf_cache: _root.blit(self.__surf_cache["blur"].subsurface(pygame.Rect(self.get_abs_position((0, 0), True) + self.get_abs_position((1, 1)))), self.get_abs_position((0, 0), True))
         return _root
 
     def apply_ui(self, _arguments: tuple[tuple[int, tuple]], _mouse_position=None) -> tuple[int, pygame.Surface]:
@@ -92,7 +92,7 @@ class UIManager:
         _label_array = []
         _text_surf_array = []
         for _label in to_tuple(_arguments):
-            _label = self.get_real_position(_label[0:4]) + _label[4:]
+            _label = self.get_abs_position(_label[0:4]) + _label[4:]
             if _label[3] != 0:
                 _label_array.append(_label[0:4])
 
