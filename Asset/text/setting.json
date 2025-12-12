@@ -2,8 +2,8 @@
   "id": 1,
   "fps": 60,
   "log_level": 5,
-  "version": 15251130,
-  "edition": "Beta",
+  "version": 16251213,
+  "edition": "Preview",
   "animation_speed": 10,
   "max_selector_num": 8
 }

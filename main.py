@@ -30,7 +30,7 @@ def asset_load() -> None:
         else:
             logger.warn("setting.json is Not Existing!")
 
-        # threading.Thread(target=get_version_list).start()
+        threading.Thread(target=get_version_list).start()
 
         logger.set_log_level(global_info["setting"]["log_level"])
 
@@ -357,14 +357,12 @@ def convertor(_setting, _task_id):
         if _setting["output_format"] == 0:
             with open("Cache/convertor/raw_command.txt", "w", encoding="utf-8") as _io:
                 _io.write("# music_name=" + _music_name + "\n")
-                _io.write("# structure_id=" + str(_task_id) + "\n")
                 _io.write("# length_of_time=" + str(max(list(_result))) + "\n")
-                _io.write("# structure_path=Asset/mcstructure/" + global_asset["structure"][_setting["structure"]] + "\n")
 
                 for _cmd in cmd_convertor(_setting, _profile, _result, _task_id, _time_offset, (True if _setting["command_type"] == 0 else False)):
                     _io.write(_cmd + "\n")
 
-            subprocess.Popen("Writer/writer.exe").wait()
+            subprocess.Popen("Writer/writer.exe -l " + str(global_info["setting"]["log_level"]) + " -s Asset/mcstructure/" + global_asset["structure"][_setting["structure"]] + " -c Cache/convertor/raw_command.txt -id " + str(_task_id) + " Cache/convertor/structure.mcstructure").wait()
 
             if not os.path.exists("Cache/convertor/structure.mcstructure"):
                 raise IOError("structure.mcstructure Not in Cache!")
@@ -670,7 +668,7 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
 
         _text_surface = to_alpha(global_asset["font"].render(global_info["message"][0], True, (255, 255, 255)), (255, 255, 255, 255 * global_info["message_info"][0]))
 
-        _text_position = ui_manager.get_abs_position((1, 1.044 - global_info["message_info"][0] * 0.089))
+        _text_position = ui_manager.get_abs_position((1, 1.044 - global_info["message_info"][0] * 0.089), True)
         _root.blit(_text_surface, ((_text_position[0] - _text_surface.get_size()[0]) / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
 
         if global_info["message_info"][1] <= 3000:
@@ -707,9 +705,10 @@ def change_button_alpha(_state: list[float], _index: int) -> None:
         else:
             _state[_n] += (127 - _state[_n]) * global_info["animation_speed"]
 
-def reduce_background():
+def reduce_background(_path: str = "") -> None:
     try:
-        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")]):
+        if not _path: _path = filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")])
+        if _path:
             pygame.image.save(pygame.transform.smoothscale(pygame.image.load(_path), (800, 450)), "Asset/image/custom_menu_background.png")
             shutil.rmtree("Cache/image")
             global_info["message"].append("已成功设置背景，重启软件生效！")
@@ -750,29 +749,41 @@ def install_editor():
     except:
         logger.error(traceback.format_exc())
 
-def enter_to_editor():
+def enter_to_editor(_path: str = ""):
     add_page(overlay_page, [processing_screen, {}])
     _remove = True
     try:
-        with open("Editor/metadata.json", "rb") as _io:
-            _meta_data = json.loads(_io.read())
+        if _path: shutil.copy(_path, "Asset/text/profile.json")
 
-        if global_info["editor_update"] and _meta_data["version"] >= global_info["editor_update"]["version"]:
-            raise Exception("New Edition Version is Available")
+        try:
+            with open("Editor/metadata.json", "rb") as _io:
+                _meta_data = json.loads(_io.read())
 
-        subprocess.Popen("Editor/ProfileEditor.exe").wait()
+            if global_info["editor_update"] and _meta_data["version"] < global_info["editor_update"]["version"]:
+                raise Exception("New Edition Version is Available")
+
+            subprocess.Popen("Editor/ProfileEditor.exe").wait()
+        except:
+            _remove = False
+            remove_page(overlay_page)
+
+            logger.error(traceback.format_exc())
+
+            if global_info["editor_update"]["version"] > 0:
+                show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], global_info["editor_update"]["hash"], start_install_editor)
+            else:
+                global_info["message"].append("无法加载编辑器版本信息，请稍后重试！")
+
+            raise
 
         if load_profile():
             global_info["message"].append("已重新加载配置文件！")
         else:
             global_info["message"].append("无法加载配置文件，已加载备配置文件！")
     except:
-        remove_page(overlay_page)
         logger.error(traceback.format_exc())
-        if global_info["editor_update"]:
-            show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], global_info["editor_update"]["hash"], start_install_editor)
-        else:
-            global_info["message"].append("无法加载编辑器版本信息，请稍后重试！")
+    finally:
+        if _remove: remove_page(overlay_page)
 
 def open_filedialog():
     try:
@@ -906,8 +917,8 @@ def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=Tr
 def loading_screen(_info, _input) -> pygame.Surface:
     _surf = ui_manager.get_blur_background(True)
     if _info["progress"] is not None:
-        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_abs_position((0.25, 0.733, 0.5, 0.053), True), 2)
-        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_abs_position((0.255, 0.742, 0.49 * (_info["progress"][0] / _info["progress"][1]), 0.036), True), 0)
+        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_abs_position((0.25, 0.733), True) + ui_manager.get_abs_position((0.5, 0.053)), 2)
+        pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_abs_position((0.255, 0.742), True) + ui_manager.get_abs_position((0.49 * (_info["progress"][0] / _info["progress"][1]), 0.036)), 0)
         if _info["progress"][0] == _info["progress"][1]:
             _info["alpha"] += (255 - _info["alpha"]) * global_info["animation_speed"]
             _surf = to_alpha(_surf, (255, 255, 255, round_45(_info["alpha"])))
@@ -915,9 +926,17 @@ def loading_screen(_info, _input) -> pygame.Surface:
     return _surf
 
 def menu_screen(_info, _input):
-    if "drop_file" in _input and os.path.splitext(_input["drop_file"])[1] == ".mid":
-        add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}])
-        global_info["convertor"]["file"] = _input["drop_file"]
+    if "drop_file" in _input:
+        match os.path.splitext(_input["drop_file"])[1]:
+            case ".mid":
+                add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}])
+                global_info["convertor"]["file"] = _input["drop_file"]
+            case ".mspf":
+                threading.Thread(target=enter_to_editor, args=[_input["drop_file"]]).start()
+            case _i if _i in (".jpeg", ".jpg", ".png"):
+                threading.Thread(target=reduce_background, args=[_input["drop_file"]]).start()
+            case _:
+                global_info["message"].append("不支持的文件格式 " + os.path.basename(_input["drop_file"]))
 
     _root, _id = ui_manager.apply_ui(
         (
@@ -951,8 +970,11 @@ def convertor_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    if "drop_file" in _input and os.path.splitext(_input["drop_file"])[1] == ".mid":
-        global_info["convertor"]["file"] = _input["drop_file"]
+    if "drop_file" in _input:
+        if os.path.splitext(_input["drop_file"])[1] == ".mid":
+            global_info["convertor"]["file"] = _input["drop_file"]
+        else:
+            global_info["message"].append("不支持的文件格式 " + os.path.basename(_input["drop_file"]))
 
     if global_info["convertor"]["edition"] == 0:
         _ver_text = "基岩版"
