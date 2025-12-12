@@ -4,13 +4,15 @@ import threading
 
 class Logger:
     def __init__(self, _log_level: int = 5) -> None:
+        self.__info = [False]
         self.__log_level = _log_level
-        self.__log_queue = queue.SimpleQueue()
-        self.__thread = threading.Thread(target=logger, args=[self.__log_queue])
-        self.__thread.start()
+        self.__log_queue = queue.Queue()
+        self.__log_thread = threading.Thread(target=logger, args=[self.__info, self.__log_queue])
     def __log_info(self, _header: str, _text: str) -> None:
         if not isinstance(_text, str):
             raise TypeError("Information Must be str!")
+        if not self.__log_thread.is_alive():
+            self.__log_thread.start()
         self.__log_queue.put((_header, _text))
     def set_log_level(self, _level: int):
         self.__log_level = _level
@@ -30,14 +32,29 @@ class Logger:
         if self.__log_level >= 5:
             self.__log_info("[D]", _text)
     def done(self) -> None:
-        self.__log_info("[DONE]", "")
-        self.__thread.join()
+        if self.__log_thread.is_alive():
+            self.__info[0] = True
+            self.__log_thread.join()
 
-def logger(_queue: queue.SimpleQueue[tuple[str]]) -> None:
+def logger(_info: list[bool], _queue: queue.Queue[tuple[str]]) -> None:
     while True:
-        _text = _queue.get()
-        if _text[0] == "[DONE]":
-            break
-        _header = _text[0] + " " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())
+        while _queue.empty():
+            if _info[0]: return
+            time.sleep(0.1)
+
+        _time = time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())
         with open("log.txt", "a", encoding="utf-8") as _io:
+            while True:
+                # 如果一段时间内没有日志就保存文件
+                for _ in range(3):
+                    # 退出计时循环
+                    if not _queue.empty(): break
+                    time.sleep(0.1)
+                else:
+                    # 如果计时结束就退出写入日志循环
+                    break
+
+                # 写入日志内容
+                _text: tuple[str] = _queue.get()
+                _header = _text[0] + " " + _time
                 _io.writelines(((_header if _n == 0 else " " * len(_header)) + " | " + _i + "\n") for _n, _i in enumerate(_text[1].splitlines()))

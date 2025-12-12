@@ -32,9 +32,6 @@ class UIManager:
                 (self.__resource["corner_3"], (_label[2] - self.__resource["corner_1"].get_size()[0], 0))
                 ))
                 _mask_surf.blit(_label_surf, (_label[0] + self.__window_offset[0], _label[1] + self.__window_offset[1]), special_flags=pygame.BLEND_RGBA_MULT)
-            _alpha_surf = pygame.Surface(_base_surf.get_size()).convert_alpha()
-            _alpha_surf.fill((127, 127, 127, 255))
-            _base_surf.blit(_alpha_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
             _base_surf.blit(_mask_surf, (0, 0))
             self.__surf_cache[_arguments] = _base_surf
         return self.__surf_cache[_arguments].copy()

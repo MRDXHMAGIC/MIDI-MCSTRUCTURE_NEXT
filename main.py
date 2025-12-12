@@ -30,6 +30,8 @@ def asset_load() -> None:
         else:
             logger.warn("setting.json is Not Existing!")
 
+        # threading.Thread(target=get_version_list).start()
+
         logger.set_log_level(global_info["setting"]["log_level"])
 
         pygame.font.init()
@@ -71,19 +73,14 @@ def asset_load() -> None:
         if not global_asset["structure"]:
             logger.warn("No Structure File!")
 
-        _message = "小提示：使用鼠标左右键来进入或返回页面！"
-        try:
-            load_profile()
-        except:
-            logger.error(traceback.format_exc())
-            _message = "无法加载配置文件，已加载备配置文件！"
-            load_profile("Asset/text/default_profile.json")
-
-        threading.Thread(target=get_version_list).start()
+        _result = load_profile()
 
         time.sleep(1)
 
-        global_info["message"].append(_message)
+        if _result:
+            global_info["message"].append("小提示：使用鼠标左右键来进入或返回页面！")
+        else:
+            global_info["message"].append("无法加载配置文件，已加载默认配置文件！")
 
         remove_page(overlay_page)
         add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0]}], 0, False)
@@ -131,52 +128,57 @@ def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygam
 
     return _progress
 
-def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=7, _sigma: float=2) -> pygame.Surface:
+def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=33, _sigma: float=1.5) -> pygame.Surface:
     _kernel = []
-    _kernel_sum = 0
-
-    if _kernel_size % 2 == 0:
-        _kernel_size += 1
-
     _radius = _kernel_size // 2
 
+    _max_kernel_var = 0
     for _x in range(_radius * -1, _radius + 1):
         _buffer = []
         for _y in range(_radius * -1, _radius + 1):
             _value = 1 / (2 * math.pi * _sigma ** 2) * math.exp(-(_x ** 2 + _y ** 2) / (2 * _sigma ** 2))
             _buffer.append(_value)
-            _kernel_sum += _value
+            if _max_kernel_var < _value: _max_kernel_var = _value
         _kernel.append(_buffer)
 
-    for _line in _kernel:
-        for _i in range(len(_line)):
-            _line[_i] /= _kernel_sum
+    _mask_size = (_radius * 2 + 1, _radius * 2 + 1)
+    _blur_mask = pygame.Surface(_mask_size).convert_alpha()
+    for _x in range(_mask_size[0]):
+        for _y in range(_mask_size[1]):
+            _blur_mask.set_at((_x, _y), (255, 255, 255, round_45(255 * _kernel[_x][_y])))
 
     _surf_size = _surf.get_size()
+    _mask = pygame.Surface(_mask_size).convert_alpha()
     _result = pygame.Surface(_surf_size).convert_alpha()
-
     for _x in range(_surf_size[0]):
         _progress[0] = _x + 1
         for _y in range(_surf_size[1]):
-            _color = (0, 0, 0)
-            for _kx in range(_kernel_size):
-                if 0 < _x + _kx - _radius < _surf_size[0]:
-                    for _ky in range(_kernel_size):
-                        if 0 < _y + _ky - _radius < _surf_size[1]:
-                            _color = tuple(_origin + _new * _kernel[_kx][_ky] for _origin, _new in zip(_color, _surf.get_at((_x + _kx - _radius, _y + _ky - _radius))))
-            _result.set_at((_x, _y), _color)
+            _mask.fill(_surf.get_at((_x, _y)))
+            _mask.blit(_blur_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            _result.blit(_mask, (_x - _radius, _y - _radius))
 
     return _result
 
-def load_profile(_path="Asset/text/profile.json"):
-    with open("Asset/text/mapping.json", "rb") as _io:
-        _mapping = json.loads(_io.read())
+def load_profile(*, _path: str = "Asset/text/profile.json", _backup_path: str = "Asset/text/default_profile.json") -> bool:
+    _result = False
+    try:
+        with open("Asset/text/mapping.json", "rb") as _io:
+            _mapping = json.loads(_io.read())
+        with open(_path, "rb") as _io:
+            global_asset["profile"] = json.loads(_io.read())
 
-    with open(_path, "rb") as _io:
-        global_asset["profile"] = json.loads(_io.read())
+        for _k in ("new_bedrock", "old_bedrock", "new_java", "old_java"):
+            global_asset["profile"][_k]["sound_list"] = translate_mapping_profile(_mapping, global_asset["profile"][_k]["sound_list"])
 
-    for _k in ("new_bedrock", "old_bedrock", "new_java", "old_java"):
-        global_asset["profile"][_k]["sound_list"] = translate_mapping_profile(_mapping, global_asset["profile"][_k]["sound_list"])
+        _result = True
+    except:
+        logger.error(traceback.format_exc())
+        if not _backup_path:
+            raise IOError("Can not Load Profile!")
+        else:
+            load_profile(_path=_backup_path, _backup_path="")
+
+    return _result
 
 def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
     _sound_list = {}
@@ -754,18 +756,23 @@ def enter_to_editor():
     try:
         with open("Editor/metadata.json", "rb") as _io:
             _meta_data = json.loads(_io.read())
-        if global_info["editor_update"]: assert _meta_data["version"] >= global_info["editor_update"]["version"]
+
+        if global_info["editor_update"] and _meta_data["version"] >= global_info["editor_update"]["version"]:
+            raise Exception("New Edition Version is Available")
 
         subprocess.Popen("Editor/ProfileEditor.exe").wait()
-        load_profile()
-        global_info["message"].append("已重新加载配置文件！")
+
+        if load_profile():
+            global_info["message"].append("已重新加载配置文件！")
+        else:
+            global_info["message"].append("无法加载配置文件，已加载备配置文件！")
     except:
         remove_page(overlay_page)
         logger.error(traceback.format_exc())
         if global_info["editor_update"]:
             show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], global_info["editor_update"]["hash"], start_install_editor)
         else:
-            global_info["message_info"].append("无法加载编辑器版本信息，请稍后重试！")
+            global_info["message"].append("无法加载编辑器版本信息，请稍后重试！")
 
 def open_filedialog():
     try:
@@ -821,21 +828,29 @@ def get_version_list():
         with requests.get("https://gitee.com/mrdxhmagic/midi-mcstructure_next/raw/master/update.json") as _response:
             _update_log = _response.json()
 
-        global_info["update_list"] = []
+        _update_list = []
         for _i in _update_log:
-            if _i["API"] == 0:
-                global_info["update_list"].append(_i)
-            if _i["API"] == 1:
-                global_info["editor_update"] = _i
+            match _i["API"]:
+                case 0:
+                    _update_list.append(_i)
+                case 1:
+                    if _i["version"] > global_info["editor_update"]["version"]: global_info["editor_update"] = _i
+                case _:
+                    logger.info("Unknown API Version: " + str(_i["API"]))
 
-        _length = len(global_info["update_list"])
-
+        _length = len(_update_list)
         for _x in range(_length):
             for _y in range(_length - _x - 1):
-                if global_info["update_list"][_y]["version"] < global_info["update_list"][_y + 1]["version"]:
-                    global_info["update_list"][_y], global_info["update_list"][_y + 1] = global_info["update_list"][_y + 1], global_info["update_list"][_y]
+                if _update_list[_y]["version"] < _update_list[_y + 1]["version"]:
+                    _update_list[_y], _update_list[_y + 1] = _update_list[_y + 1], _update_list[_y]
 
-        global_info["new_version"] = global_info["update_list"][0]["version"] > global_info["setting"]["version"]
+        for _i in _update_list:
+            if _i["edition"] not in global_info["update_list"][0]:
+                global_info["update_list"][0].append(_i["edition"])
+                global_info["update_list"][1][_i["edition"]] = []
+            global_info["update_list"][1][_i["edition"]].append(_i)
+
+        global_info["new_version"] = _update_list[0]["version"] > global_info["setting"]["version"]
     except:
         logger.error(traceback.format_exc())
 
@@ -900,6 +915,10 @@ def loading_screen(_info, _input) -> pygame.Surface:
     return _surf
 
 def menu_screen(_info, _input):
+    if "drop_file" in _input and os.path.splitext(_input["drop_file"])[1] == ".mid":
+        add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}])
+        global_info["convertor"]["file"] = _input["drop_file"]
+
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, ("转换文件", 0.035, _info["button_state"][0]), 0),
@@ -931,6 +950,9 @@ def menu_screen(_info, _input):
 def convertor_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
+
+    if "drop_file" in _input and os.path.splitext(_input["drop_file"])[1] == ".mid":
+        global_info["convertor"]["file"] = _input["drop_file"]
 
     if global_info["convertor"]["edition"] == 0:
         _ver_text = "基岩版"
@@ -1046,7 +1068,7 @@ def software_setting_screen(_info, _input):
     if "mouse_left" in _input and not _input["mouse_left"]:
         match _id:
             case 0:
-                add_page(overlay_page, [version_list_screen, {"index": 0, "button_state": [0, 0, 0, 0]}])
+                add_page(overlay_page, [version_list_screen, {"tag_index": 0, "index": 0, "edition_info": global_info["update_list"], "button_state": [0, 0, 0, 0, 0]}])
             case 1:
                 set_selector_num()
             case 2:
@@ -1075,14 +1097,18 @@ def version_list_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
-    if global_info["update_list"]:
+    if global_info["update_list"][1]:
+        _ver_list = _info["edition_info"][1][_info["edition_info"][0][_info["tag_index"]]]
+
         _root, _id = ui_manager.apply_ui(
             (
-                (0.025, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][0]), 0),
+                (0.025, 0.044, 0.575, 0.089, (_info["edition_info"][0][_info["tag_index"]], 0.035, _info["button_state"][4]), 4),
+                (0.625, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(len(_ver_list)), 0.035, 255), -1),
+                (0.85, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][0]), 0),
                 (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][1]), 1),
-                (0.1, 0.044, 0.8, 0.089, ("V" + str(global_info["update_list"][_info["index"]]["version"]) + ("-" + str(global_info["update_list"][_info["index"]]["edition"]) if global_info["update_list"][_info["index"]]["edition"] else ""), 0.035, 255), -1),
-                (0.025, 0.178, 0.95, 0.089, ("查看版本详情", 0.035, _info["button_state"][2]), 2),
-                (0.025, 0.311, 0.95, 0.089, ("立即下载并安装", 0.035, _info["button_state"][3]), 3)
+                (0.025, 0.178, 0.95, 0.089, ("V" + str(_ver_list[_info["index"]]["version"]) + ("-" + str(_ver_list[_info["index"]]["edition"]) if _ver_list[_info["index"]]["edition"] else ""), 0.035, 255), -1),
+                (0.025, 0.311, 0.95, 0.089, ("查看版本详情", 0.035, _info["button_state"][2]), 2),
+                (0.025, 0.444, 0.95, 0.089, ("立即下载并安装", 0.035, _info["button_state"][3]), 3)
             ),
             pygame.mouse.get_pos()
         )
@@ -1092,21 +1118,26 @@ def version_list_screen(_info, _input):
                 case 0:
                     _info["index"] -= 1
                     if _info["index"] < 0:
-                        _info["index"] = len(global_info["update_list"]) - 1
+                        _info["index"] = len(_ver_list) - 1
                 case 1:
                     _info["index"] += 1
-                    if _info["index"] >= len(global_info["update_list"]):
+                    if _info["index"] >= len(_ver_list):
                         _info["index"] = 0
                 case 2:
-                    if global_info["update_list"][_info["index"]]["description_url"]: webbrowser.open(global_info["update_list"][_info["index"]]["description_url"])
+                    if _ver_list[_info["index"]]["description_url"]: webbrowser.open(_ver_list[_info["index"]]["description_url"])
                 case 3:
-                    _ver_info = global_info["update_list"][_info["index"]]
+                    _ver_info = _ver_list[_info["index"]]
                     show_download(
                         ("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]),
                         _ver_info["download_url"],
                         _ver_info["hash"],
                         reboot_to_update
                     )
+                case 4:
+                    _info["index"] = 0
+                    _info["tag_index"] += 1
+                    if _info["tag_index"] >= len(_info["edition_info"][0]):
+                        _info["tag_index"] = 0
 
         change_button_alpha(_info["button_state"], _id)
     else:
@@ -1184,8 +1215,8 @@ def setting_screen(_info, _input):
 
     _root, _id = ui_manager.apply_ui(
         (
-            (0.025, 0.044, 0.95, 0.089, ("输出格式" + ["mcstructure", "mcfunction"][global_info["convertor"]["output_format"]], 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("播放模式" + ["命令链延迟", "计分板时钟", "时钟与编号"][global_info["convertor"]["command_type"]], 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.044, 0.95, 0.089, ("输出格式 " + ["mcstructure", "mcfunction"][global_info["convertor"]["output_format"]], 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("播放模式 " + ["命令链延迟", "计分板时钟", "时钟与编号"][global_info["convertor"]["command_type"]], 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, ("平均音量 " + (str(global_info["convertor"]["volume"]) + "%" if global_info["convertor"]["volume"] else "保持原始音量"), 0.035, _info["button_state"][2]), 2),
             (0.025, 0.444, 0.95, 0.089, ("结构模板 " + os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0] if global_info["convertor"]["output_format"] == 0 and global_asset["structure"] else "不可用", 0.035, _info["button_state"][3]), 3)
         ),
@@ -1361,7 +1392,7 @@ def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
 def processing_screen(_info, _input):
     return ui_manager.get_blur_background()
 
-global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [], "editor_update": {}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
+global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [[], {}], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list] = {}
 overlay_page = []
 
@@ -1397,6 +1428,8 @@ try:
                     env_list["mouse_left"] = False
                 if evt.button == 3:
                     env_list["mouse_right"] = False
+            elif evt.type == pygame.DROPFILE:
+                env_list["drop_file"] = evt.file
             elif evt.type == pygame.VIDEORESIZE:
                 threading.Thread(target=change_size, args=[(evt.w, evt.h), True]).start()
                 window = pygame.display.set_mode((evt.w, evt.h), pygame.RESIZABLE)
@@ -1420,7 +1453,6 @@ except:
     global_info["exit"] = 3
     logger.fatal(traceback.format_exc())
 finally:
-    logger.done()
     if global_info["exit"] != 3: pygame.quit()
 
     if not os.path.exists("Asset/text"):
@@ -1436,4 +1468,5 @@ finally:
         window.blit(global_asset["error"], (0, 0))
         pygame.display.flip()
     else:
+        logger.done()
         os._exit(0)
