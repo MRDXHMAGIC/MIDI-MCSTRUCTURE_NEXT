@@ -25,7 +25,7 @@
     "API": 0,
     "hash": "716a1e5869cbe0fc615b468ca763dde3",
     "version": 10250719,
-    "edition": "RC",
+    "edition": "ReleaseCandidate",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V10250719-RC/MIDI-MCSTRUCTURE_NEXT_V10250719-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V10250719-RC"
   },
@@ -65,7 +65,7 @@
     "API": 0,
     "hash": "3d45e977588b1a933fb02992a3f27139",
     "version": 11250828,
-    "edition": "RC",
+    "edition": "ReleaseCandidate",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V11250828-RC/MIDI-MCSTRUCTURE_NEXT_V11250828-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V11250828-RC"
   },
@@ -89,7 +89,7 @@
     "API": 0,
     "hash": "6bf1820dd835771cf66998801360fdaa",
     "version": 12250921,
-    "edition": "RC",
+    "edition": "ReleaseCandidate",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V12250921-RC/MIDI-MCSTRUCTURE_NEXT_V12250921-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V12250921-RC"
   },
@@ -121,7 +121,7 @@
     "API": 0,
     "hash": "453e433ff2ae1ea7a46905ed8c115f0a",
     "version": 13251004,
-    "edition": "RC",
+    "edition": "ReleaseCandidate",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V13251004-RC/MIDI-MCSTRUCTURE_NEXT_V13251004-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V13251004-RC"
   },
@@ -153,7 +153,7 @@
     "API": 0,
     "hash": "44a67adbe08bd9da4fe8f4842c9c4c5b",
     "version": 14251008,
-    "edition": "RC",
+    "edition": "ReleaseCandidate",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V14251008-RC/MIDI-MCSTRUCTURE_NEXT_V14251008-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251008-RC"
   },

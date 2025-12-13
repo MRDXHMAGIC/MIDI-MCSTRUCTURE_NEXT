@@ -30,7 +30,7 @@ def asset_load() -> None:
         else:
             logger.warn("setting.json is Not Existing!")
 
-        threading.Thread(target=get_version_list).start()
+        # threading.Thread(target=get_version_list).start()
 
         logger.set_log_level(global_info["setting"]["log_level"])
 
@@ -128,7 +128,7 @@ def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygam
 
     return _progress
 
-def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=33, _sigma: float=1.5) -> pygame.Surface:
+def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=33, _sigma: float=2) -> pygame.Surface:
     _kernel = []
     _radius = _kernel_size // 2
 
@@ -145,11 +145,13 @@ def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=
     _blur_mask = pygame.Surface(_mask_size).convert_alpha()
     for _x in range(_mask_size[0]):
         for _y in range(_mask_size[1]):
-            _blur_mask.set_at((_x, _y), (255, 255, 255, round_45(255 * _kernel[_x][_y])))
+            _blur_mask.set_at((_x, _y), (255, 255, 255, round_45(255 * (1 / _max_kernel_var) * _kernel[_x][_y])))
 
     _surf_size = _surf.get_size()
     _mask = pygame.Surface(_mask_size).convert_alpha()
     _result = pygame.Surface(_surf_size).convert_alpha()
+
+    _mask.set_alpha(255 * _max_kernel_var)
     for _x in range(_surf_size[0]):
         _progress[0] = _x + 1
         for _y in range(_surf_size[1]):
@@ -278,11 +280,14 @@ def convertor(_setting, _task_id):
                         _note_buffer[_tick_time] = []
 
                     # 向该时间中添加音符数据
-                    _note_buffer[_tick_time].append({
+                    _note_buffer[_tick_time].append(
+                        {
                             "program": _note[0],
                             "pitch": _note_pitch,
                             "velocity": _note_velocity,
-                            "panning": _data["panning"]})
+                            "panning": _data["panning"]
+                        }
+                    )
             else:
                 raise TypeError("Unknown Data Type: " + str(_data["type"]))
 
@@ -362,7 +367,16 @@ def convertor(_setting, _task_id):
                 for _cmd in cmd_convertor(_setting, _profile, _result, _task_id, _time_offset, (True if _setting["command_type"] == 0 else False)):
                     _io.write(_cmd + "\n")
 
-            subprocess.Popen("Writer/writer.exe -l " + str(global_info["setting"]["log_level"]) + " -s Asset/mcstructure/" + global_asset["structure"][_setting["structure"]] + " -c Cache/convertor/raw_command.txt -id " + str(_task_id) + " Cache/convertor/structure.mcstructure").wait()
+            subprocess.Popen(" ".join(
+                (
+                    "Writer/writer.exe",
+                    "-l " + str(global_info["setting"]["log_level"]),
+                    "-s Asset/mcstructure/" + global_asset["structure"][_setting["structure"]],
+                    "-c Cache/convertor/raw_command.txt",
+                    "-id " + ("0" if _task_id is None else str(_task_id)),
+                    "Cache/convertor/structure.mcstructure"
+                )
+            )).wait()
 
             if not os.path.exists("Cache/convertor/structure.mcstructure"):
                 raise IOError("structure.mcstructure Not in Cache!")
@@ -647,7 +661,9 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
     _pages_num = len(_overlay)
     for _n in range(_pages_num):
         if _n + 1 == _pages_num or _overlay[_n + 1][2] != 1:
-            _root.blit(to_alpha(_overlay[_n][0](_overlay[_n][1], _event if _overlay[_n][3] else {}), (255, 255, 255, 255 * _overlay[_n][2])), (0, 0))
+            _window = _overlay[_n][0](_overlay[_n][1], _event if _overlay[_n][3] else {})
+            _window.set_alpha(_overlay[_n][2] * 255)
+            _root.blit(_window, (0, 0))
         if _overlay[_n][3]:
             _overlay[_n][2] += (1.01 - _overlay[_n][2]) * global_info["animation_speed"]
             if _overlay[_n][2] >= 1:
@@ -666,7 +682,8 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
 
         _root.blit(global_asset["message_mask"], ui_manager.get_abs_position((0, 1 - global_info["message_info"][0] * 0.089), True))
 
-        _text_surface = to_alpha(global_asset["font"].render(global_info["message"][0], True, (255, 255, 255)), (255, 255, 255, 255 * global_info["message_info"][0]))
+        _text_surface = global_asset["font"].render(global_info["message"][0], True, (255, 255, 255))
+        _text_surface.set_alpha(255 * global_info["message_info"][0])
 
         _text_position = ui_manager.get_abs_position((1, 1.044 - global_info["message_info"][0] * 0.089), True)
         _root.blit(_text_surface, ((_text_position[0] - _text_surface.get_size()[0]) / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
@@ -681,14 +698,6 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
                 global_info["message_info"] = [0, 0]
 
 # 功能函数
-def to_alpha(_origin_surf: pygame.Surface, _color_value, _surf_size=None, _surf_position=(0, 0)) -> pygame.Surface:
-    if _surf_size is None:
-        _surf_size = _origin_surf.get_size()
-    _alpha_surf = pygame.Surface(_surf_size, pygame.SRCALPHA)
-    _alpha_surf.fill(_color_value)
-    _origin_surf.blit(_alpha_surf, _surf_position, special_flags=pygame.BLEND_RGBA_MULT)
-    return _origin_surf
-
 def watchdog():
     while True:
         if global_info["watch_dog"] >= 30:
@@ -921,7 +930,7 @@ def loading_screen(_info, _input) -> pygame.Surface:
         pygame.draw.rect(_surf, (255, 255, 255), ui_manager.get_abs_position((0.255, 0.742), True) + ui_manager.get_abs_position((0.49 * (_info["progress"][0] / _info["progress"][1]), 0.036)), 0)
         if _info["progress"][0] == _info["progress"][1]:
             _info["alpha"] += (255 - _info["alpha"]) * global_info["animation_speed"]
-            _surf = to_alpha(_surf, (255, 255, 255, round_45(_info["alpha"])))
+            _surf.set_alpha(round_45(_info["alpha"]))
     _surf.blits(((global_asset["loading_mask"], ui_manager.get_abs_position((0, 0), True)), (global_asset["logo"], ui_manager.get_abs_position((0.15, 0.429), True))))
     return _surf
 
@@ -1418,13 +1427,12 @@ global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0],
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list] = {}
 overlay_page = []
 
-logger = log.Logger(5)
-
 pygame.display.init()
 pygame.display.set_caption("MIDI-MCSTRUCTURE NEXT  GUI")
 pygame.display.set_icon(pygame.image.load("Asset/image/icon.ico"))
 window = pygame.display.set_mode((800, 450), pygame.RESIZABLE)
 
+logger = log.Logger(5)
 ui_manager = UIManager()
 
 try:

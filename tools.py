@@ -1,5 +1,20 @@
 import random
 
+def get_list_position(_size: tuple[int], _position: tuple[int]) -> int:
+    _n = _position[2]
+    _n += _position[1] * _size[2]
+    _n += _position[0] * (_size[1] * _size[2])
+    return _n
+
+def check_position(_size: tuple[int], _position: tuple[[int]]) -> bool:
+    if _position[0] >= _size[0] or _position[0] < 0:
+        return False
+    elif _position[1] >= _size[1] or _position[1] < 0:
+        return False
+    elif _position[2] >= _size[2] or _position[2] < 0:
+        return False
+    return True
+
 def uuid(_n: int) -> str:
     _uuid = ""
     while _n:

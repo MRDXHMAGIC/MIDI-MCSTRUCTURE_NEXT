@@ -2,22 +2,7 @@ import log
 import argparse
 import traceback
 import amulet_nbt
-
-def get_list_position(_size, _position):
-    _n = _position[2]
-    _n += _position[1] * _size[2]
-    _n += _position[0] * (_size[1] * _size[2])
-    return _n
-
-def check_position(_size, _position):
-    if _position[0] >= _size[0] or _position[0] < 0:
-        return False
-    elif _position[1] >= size[1] or _position[1] < 0:
-        return False
-    elif _position[2] >= size[2] or _position[2] < 0:
-        return False
-    else:
-        return True
+from tools import get_list_position, check_position
 
 logger = log.Logger()
 
@@ -98,36 +83,36 @@ try:
         if n in structure["structure"]["palette"]["default"]["block_position_data"] and check_position(size, position):
             structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["Command"] = amulet_nbt.StringTag(command)
             structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["TickDelay"] = amulet_nbt.IntTag(delay)
-            direct = structure["structure"]["palette"]["default"]["block_palette"][structure["structure"]["block_indices"][0][get_list_position(size, position)].py_int]["states"]["facing_direction"].py_int
-            if direct == 0:
+            direction = structure["structure"]["palette"]["default"]["block_palette"][structure["structure"]["block_indices"][0][get_list_position(size, position)].py_int]["states"]["facing_direction"].py_int
+            if direction == 0:
                 position[1] -= 1
-            elif direct == 1:
+            elif direction == 1:
                 position[1] += 1
-            elif direct == 2:
+            elif direction == 2:
                 position[2] -= 1
-            elif direct == 3:
+            elif direction == 3:
                 position[2] += 1
-            elif direct == 4:
+            elif direction == 4:
                 position[0] -= 1
-            elif direct == 5:
+            elif direction == 5:
                 position[0] += 1
         else:
             break
 
     while True:
         n = str(get_list_position(size, position))
-        direct = structure["structure"]["palette"]["default"]["block_palette"][structure["structure"]["block_indices"][0][get_list_position(size, position)].py_int]["states"]["facing_direction"].py_int
-        if direct == 0:
+        direction = structure["structure"]["palette"]["default"]["block_palette"][structure["structure"]["block_indices"][0][get_list_position(size, position)].py_int]["states"]["facing_direction"].py_int
+        if direction == 0:
             position[1] -= 1
-        elif direct == 1:
+        elif direction == 1:
             position[1] += 1
-        elif direct == 2:
+        elif direction == 2:
             position[2] -= 1
-        elif direct == 3:
+        elif direction == 3:
             position[2] += 1
-        elif direct == 4:
+        elif direction == 4:
             position[0] -= 1
-        elif direct == 5:
+        elif direction == 5:
             position[0] += 1
         if structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["Command"].py_str == "":
             del structure["structure"]["palette"]["default"]["block_position_data"][n]
