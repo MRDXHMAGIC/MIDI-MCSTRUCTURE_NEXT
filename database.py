@@ -3,11 +3,11 @@ from tools import round_45
 
 class InfoList:
     def __init__(self, _init_value) -> None:
-        self.list_info = {float("-inf"): _init_value}
+        self.list_info = {0: _init_value}
 
-    def __iter__(self):
-        for _i in sorted(list(self.list_info)):
-            yield self.list_info[_i]
+    def __iter__(self) -> tuple:
+        for _k in sorted(self.list_info.keys()):
+            yield _k, self.list_info[_k]
 
     def add_info(self, _time: int | float | str, _value) -> None:
         if not isinstance(_time, (int, float, str)):
@@ -19,7 +19,7 @@ class InfoList:
             raise ValueError("Time Must be int, float or str!")
 
         _time = float(_time)
-        _time_list = sorted(list(self.list_info), reverse=True)
+        _time_list = sorted(self.list_info.keys(), reverse=True)
         for _i in _time_list:
             if _i <= _time:
                 return self.list_info[_i]
@@ -71,7 +71,7 @@ class LyricsList:
             raise TypeError("Unsupported Lyrics Struct!")
 
         self.lyrics_list = []
-        _time_list = sorted(list(_lyrics_list))
+        _time_list = sorted(_lyrics_list.keys())
 
         # 处理歌词文本
         if _join:

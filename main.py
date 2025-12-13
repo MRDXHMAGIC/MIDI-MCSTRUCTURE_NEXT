@@ -4,6 +4,7 @@ import math
 import json
 import time
 import py7zr
+import pickle
 import shutil
 import pygame
 import hashlib
@@ -12,7 +13,7 @@ import threading
 import traceback
 import subprocess
 import webbrowser
-from tools import round_45, uuid, is_number
+from tools import round_01, round_45, uuid, is_number, get_time_text
 from tkinter import filedialog
 from database import LyricsList
 from ui_manager import UIManager
@@ -44,6 +45,15 @@ def asset_load() -> None:
         ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
 
         pygame.init()
+
+        with open("Asset/text/mapping.json", "rb") as _io:
+            global_asset["mapping"] = json.loads(_io.read())
+
+        global_asset["instruments"] = {"other": {}, "percussion": {}}
+        for _k, _v in global_asset["mapping"].items():
+            if _k not in ("undefined", "default", "percussion"): global_asset["instruments"]["other"][_v] = int(_k)
+        for _k, _v in global_asset["mapping"]["percussion"].items():
+            if _k != "undefined": global_asset["instruments"]["percussion"][_v] = int(_k)
 
         if not os.path.exists("Asset/text/default_profile.json"):
             logger.info("Copy Backup Profile")
@@ -164,14 +174,8 @@ def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=
 def load_profile(*, _path: str = "Asset/text/profile.json", _backup_path: str = "Asset/text/default_profile.json") -> bool:
     _result = False
     try:
-        with open("Asset/text/mapping.json", "rb") as _io:
-            _mapping = json.loads(_io.read())
         with open(_path, "rb") as _io:
             global_asset["profile"] = json.loads(_io.read())
-
-        for _k in ("new_bedrock", "old_bedrock", "new_java", "old_java"):
-            global_asset["profile"][_k]["sound_list"] = translate_mapping_profile(_mapping, global_asset["profile"][_k]["sound_list"])
-
         _result = True
     except:
         logger.error(traceback.format_exc())
@@ -214,10 +218,36 @@ def convertor(_setting, _task_id):
             elif global_info["convertor"]["version"] == 1:
                 _profile = global_asset["profile"]["new_java"]
 
+        if not os.path.exists("Cache/mapping"): os.makedirs("Cache/mapping")
+
+        _midi_reader = MIDIReader(_setting["file"])
+
+        _path_hash = str(hashlib.md5(_setting["file"].encode()).hexdigest())
+        if _path_hash + ".pkl" in os.listdir("Cache/mapping"):
+            with open("Cache/mapping/" + _path_hash + ".pkl", "rb") as _io:
+                _mapping = pickle.load(_io)
+            global_info["message"].append("请调整乐器音色映射方案（已加载缓存方案）")
+        else:
+            _mapping = {}
+            global_info["message"].append("请调整乐器音色映射方案")
+
+        _instruments = _midi_reader.scan_instruments()
+
+        _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0, "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": False}
+        add_page(overlay_page, [adj_mapping_screen, _info])
+
+        while not _info["done"]:
+            time.sleep(0.2)
+
+        with open("Cache/mapping/" + _path_hash + ".pkl", "wb") as _io:
+            pickle.dump(_mapping, _io, protocol=5)
+
+        _midi_reader.override_mapping(_mapping)
+
         _note_buffer = {}
         _lyrics_buffer = {}
         _average_volume = [0, 0]
-        for _time, _data in MIDIReader(_setting["file"]):
+        for _time, _data in _midi_reader:
             if _data["type"] == "text":
                 # 计算游戏刻数
                 _tick_time = int(round_45(_time / _setting["time_per_tick"]))
@@ -236,12 +266,12 @@ def convertor(_setting, _task_id):
 
                 # 获取游戏中的乐器名称
                 if _data["percussion"]:
-                    _program = _profile["sound_list"]["percussion"].get(_data["program"], _profile["sound_list"]["percussion"]["undefined"])
+                    _program = _profile["sound_list"].get(global_asset["mapping"]["percussion"].get(str(_data["program"]), global_asset["mapping"]["percussion"]["undefined"]))
                 else:
                     if _data["program"] == -1:
-                        _program = _profile["sound_list"]["default"]
+                        _program = _profile["sound_list"][global_asset["mapping"]["default"]]
                     else:
-                        _program = _profile["sound_list"].get(_data["program"], _profile["sound_list"]["undefined"])
+                        _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data["program"]), global_asset["mapping"]["undefined"]))
 
                 _delay_time = 0
                 # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
@@ -831,6 +861,26 @@ def start_task(_id: None | int = None) -> None:
         _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
         threading.Thread(target=convertor, args=(_argument, _id)).start()
 
+def get_inst_text(_data: dict[int, list[tuple[list | int]]], _overriding_mapping: dict[int, dict[int, int]], _channel: int, _index: int) -> str:
+    if _index >= len(_data[_channel]): return ""
+
+    _text = get_time_text(_data[_channel][_index][0][0]) + " - " + get_time_text(_data[_channel][_index][0][1]) + "  |  "
+    _mapping = global_asset["mapping"]["percussion"] if _channel == 9 else global_asset["mapping"]
+    _inst_id = _data[_channel][_index][1]
+
+    if _inst_id == -1:
+        _text += _mapping["default"].upper() + "(D)"
+    else:
+        _text += _mapping.get(str(_inst_id), _mapping["undefined"]).upper() + "(" + str(_inst_id) + ")"
+
+    if _overriding := _overriding_mapping.get(_channel):
+        if _inst_id in _overriding: _text += " ➡ " + str(_mapping[str(_overriding[_inst_id])]).upper()
+
+    return _text
+
+def get_inst_name(_inst_list: list[str], _index: int) -> str:
+    return "" if _index >= len(_inst_list) else _inst_list[_index].upper()
+
 # GUI页面管理函数
 def add_page(_overlay, _page, _position=0, _back=True):
     _overlay.append(_page + [_position, True, _back])
@@ -1240,6 +1290,94 @@ def download_screen(_info, _input):
 
     return _root
 
+def adj_mapping_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        _info["done"] = True
+        remove_page(overlay_page)
+
+    _config_length = len(_info["data"][_info["channels"][_info["channel_index"]]])
+    _page_num = round_01(_config_length / 6)
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.625, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(_page_num) if _config_length else "无数据", 0.035, 255), -1),
+            (0.025, 0.044, 0.575, 0.089, ("通道 " + str(_info["channels"][_info["channel_index"]] + 1), 0.035, _info["button_state"][0]), 0),
+            (0.85, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][1]), 1),
+            (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.178, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6), 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.311, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 1), 0.035, _info["button_state"][4]), 4),
+            (0.025, 0.444, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 2), 0.035, _info["button_state"][5]), 5),
+            (0.025, 0.578, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 3), 0.035, _info["button_state"][6]), 6),
+            (0.025, 0.711, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 4), 0.035, _info["button_state"][7]), 7),
+            (0.025, 0.844, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 5), 0.035, _info["button_state"][8]), 8)
+        )[:(4 + _config_length - _info["index"] * 6) if _page_num == 0 or _info["index"] + 1 == _page_num else 10],
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                _info["channel_index"] += 1
+                if _info["channel_index"] >= len(_info["channels"]):
+                    _info["channel_index"] = 0
+                _info["index"] = 0
+            case 1:
+                _info["index"] -= 1
+                if _info["index"] < 0:
+                    _info["index"] = _page_num - 1
+            case 2:
+                _info["index"] += 1
+                if _info["index"] >= _page_num:
+                    _info["index"] = 0
+            case _n if 3 <= _n <= 8:
+                if _info["channels"][_info["channel_index"]] not in _info["mapping"]: _info["mapping"][_info["channels"][_info["channel_index"]]] = {}
+                add_page(overlay_page, [packing_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "percussion": _info["channels"][_info["channel_index"]] == 9, "mapping": _info["mapping"][_info["channels"][_info["channel_index"]]], "origin": _info["data"][_info["channels"][_info["channel_index"]]][_info["index"] * 6 + _id - 3][1]}])
+
+    change_button_alpha(_info["button_state"], _id)
+
+    return _root
+
+def packing_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        remove_page(overlay_page)
+
+    _config = tuple((global_asset["instruments"]["percussion"] if _info["percussion"] else global_asset["instruments"]["other"]).keys())
+    _config_length = len(_config)
+    _page_num = round_01(_config_length / 6)
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.625, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(_page_num) if _config_length else "无数据", 0.035, 255), -1),
+            (0.025, 0.044, 0.575, 0.089, ("打击乐器" if _info["percussion"] else "非打击乐器", 0.035, 255), -1),
+            (0.85, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][0]), 0),
+            (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.178, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6), 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.311, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 1), 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.444, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 2), 0.035, _info["button_state"][4]), 4),
+            (0.025, 0.578, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 3), 0.035, _info["button_state"][5]), 5),
+            (0.025, 0.711, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 4), 0.035, _info["button_state"][6]), 6),
+            (0.025, 0.844, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 5), 0.035, _info["button_state"][7]), 7)
+        )[:(4 + _config_length - _info["index"] * 6) if _page_num == 0 or _info["index"] + 1 == _page_num else 10],
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                _info["index"] -= 1
+                if _info["index"] < 0:
+                    _info["index"] = _page_num - 1
+            case 1:
+                _info["index"] += 1
+                if _info["index"] >= _page_num:
+                    _info["index"] = 0
+            case _n if 2 <= _n <= 7:
+                _index = _info["index"] * 6 + _id - 2
+                _info["mapping"][_info["origin"]] = (global_asset["instruments"]["percussion"] if _info["percussion"] else global_asset["instruments"]["other"])[_config[_index]]
+                remove_page(overlay_page)
+
+    change_button_alpha(_info["button_state"], _id)
+
+    return _root
+
 def setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
@@ -1424,7 +1562,7 @@ def processing_screen(_info, _input):
     return ui_manager.get_blur_background()
 
 global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [[], {}], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
-global_asset: dict[str, pygame.Surface | pygame.font.Font | list] = {}
+global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 
 pygame.display.init()

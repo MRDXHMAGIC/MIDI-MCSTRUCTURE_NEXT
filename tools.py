@@ -22,13 +22,21 @@ def uuid(_n: int) -> str:
         _n -= 1
     return _uuid
 
-def round_45(_i: float, _n=0) -> float:
+def round_45(_i: float, _n: int = 0) -> float:
     _i = int(_i * 10 ** int(_n + 1))
     if _i % 10 >= 5:
         _i += 10
     _i = int(_i / 10)
     return _i / (10 ** int(_n))
 
+def round_01(_i: float, _n: int = 3) -> int:
+    if _i % 1 >= 10 ** -_n:
+        _i += 1
+    return int(_i)
+
 def is_number(_str: str) -> bool:
     _length = len(_str)
     return all(_str[_i] in "0123456789" or (_str[_i] == "." and 1 < _i + 1 < _length) for _i in range(_length)) and _str.count(".") <= 1
+
+def get_time_text(_time: int) -> str:
+    return str(_time // 60).rjust(2, "0") + ":" + str(_time % 60).rjust(2, "0")
