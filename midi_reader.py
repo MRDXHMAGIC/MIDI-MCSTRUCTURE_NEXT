@@ -44,7 +44,7 @@ class MIDIReader:
                     _tempo_info.add_tempo(_time, _message.tempo)
                 # 获取通道音色事件【跳过打击乐器（第十轨道上的音符）】
                 elif _message.type == "program_change":
-                    _channel_info[_channel].add_info(_time, _message.program)
+                    if _channel != 9: _channel_info[_channel].add_info(_time, _message.program)
                 # 获取打击乐器信息
                 elif _message.type == "note_on":
                     if _channel == 9:
