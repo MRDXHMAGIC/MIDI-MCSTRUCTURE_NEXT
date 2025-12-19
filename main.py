@@ -23,6 +23,7 @@ from midi_reader import MIDIReader
 # 加载资源函数
 def asset_load() -> None:
     try:
+        logger.debug("Loading Setting Files...")
         if os.path.exists("Asset/text/setting.json"):
             with open("Asset/text/setting.json", "rb") as _io:
                 _buffer = json.loads(_io.read())
@@ -31,24 +32,49 @@ def asset_load() -> None:
         else:
             logger.warn("setting.json is Not Existing!")
 
-        threading.Thread(target=get_version_list).start()
+        if not global_info["setting"]["disable_update_check"]:
+            threading.Thread(target=get_version_list, daemon=True).start()
+        else:
+            logger.info("Disable Update Check")
 
         logger.set_log_level(global_info["setting"]["log_level"])
 
+        logger.debug("Pygame Font Module Initializing...")
         pygame.font.init()
 
-        if _progress := change_size((800, 450), False):
+        logger.debug("UI Renderer Initializing...")
+        global_asset["res_logo"] = pygame.image.load("Asset/image/logo.png").convert_alpha()
+        global_asset["res_error"] = pygame.image.load("Asset/image/error_background.png").convert_alpha()
+        global_asset["res_message"] = pygame.image.load("Asset/image/mask.png").convert_alpha()
+        global_asset["res_load_mask"] = pygame.image.load("Asset/image/loading_mask.png").convert_alpha()
+        if os.path.exists("Asset/image/custom_menu_background.png"):
+            global_asset["menu"] = pygame.image.load("Asset/image/custom_menu_background.png").convert_alpha()
+        else:
+            global_asset["menu"] = pygame.image.load("Asset/image/default_menu_background.png").convert_alpha()
+
+        if os.path.exists("Cache/image/blur.png"):
+            global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
+            _progress = None
+        else:
+            global_asset["blur"] = pygame.Surface(global_asset["menu"].get_size()).convert_alpha()
+            _progress = [0, global_asset["menu"].get_size()[0]]
+
+        change_size((800, 450), False, _progress)
+        if _progress is not None:
             global_asset["blur"] = blur_picture(global_asset["menu"], _progress)
             if not os.path.exists("Cache/image"):
                 os.makedirs("Cache/image")
             pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
         ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
 
+        logger.debug("Pygame Modules Initializing...")
         pygame.init()
 
+        logger.debug("Loading Mapping Files...")
         with open("Asset/text/mapping.json", "rb") as _io:
             global_asset["mapping"] = json.loads(_io.read())
 
+        logger.debug("Producing Mapping...")
         global_asset["instruments"] = {"other": {}, "percussion": {}}
         for _k, _v in global_asset["mapping"].items():
             if _k not in ("undefined", "default", "percussion"): global_asset["instruments"]["other"][_v] = int(_k)
@@ -60,7 +86,7 @@ def asset_load() -> None:
             shutil.copy("Asset/text/profile.json", "Asset/text/default_profile.json")
 
         if os.path.isdir("Cache/extracted/Updater"):
-            logger.info("Replace Updater File.")
+            logger.info("Replacing Updater Files...")
             _n = 0
             while _n <= 16:
                 try:
@@ -73,6 +99,7 @@ def asset_load() -> None:
             shutil.copytree("Cache/extracted/Updater", "Updater")
             shutil.rmtree("Cache/extracted")
 
+        logger.debug("Scanning .mcstructure Files...")
         global_asset["structure"] = []
         for _n in os.listdir("Asset/mcstructure"):
             if os.path.splitext(_n)[1] == ".mcstructure":
@@ -83,8 +110,10 @@ def asset_load() -> None:
         if not global_asset["structure"]:
             logger.warn("No Structure File!")
 
+        logger.debug("Loading Profile...")
         _result = load_profile()
 
+        logger.debug("Initialized Successfully!")
         time.sleep(1)
 
         if _result:
@@ -98,36 +127,24 @@ def asset_load() -> None:
         global_info["exit"] = 3
         logger.error(traceback.format_exc())
 
-def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygame.Surface]:
-    _progress = None
+def change_size(_size: tuple[int], _exit: bool, _progress: list | None = None) -> tuple[list[int] | None, pygame.Surface]:
     try:
-        # 加载背景
-        if os.path.exists("Asset/image/custom_menu_background.png"):
-            global_asset["menu"] = pygame.image.load("Asset/image/custom_menu_background.png").convert_alpha()
-        else:
-            global_asset["menu"] = pygame.image.load("Asset/image/default_menu_background.png").convert_alpha()
-
-        if os.path.exists("Cache/image/blur.png"):
-            global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
-        else:
-            global_asset["blur"] = pygame.Surface(global_asset["menu"].get_size()).convert_alpha()
-            _progress = [0, global_asset["menu"].get_size()[0]]
         # 添加资源
         ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
         # 设置尺寸
         ui_manager.change_size(_size)
         # 加载错误界面
-        global_asset["error"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/error_background.png"), ui_manager.get_abs_position((1, 1))).convert_alpha()
+        global_asset["error"] = pygame.transform.smoothscale(global_asset["res_error"], ui_manager.get_abs_position((1, 1)))
         # 加载logo
-        global_asset["logo"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/logo.png"), ui_manager.get_abs_position((0.7, 0.142))).convert_alpha()
+        global_asset["logo"] = pygame.transform.smoothscale(global_asset["res_logo"], ui_manager.get_abs_position((0.7, 0.142))).convert_alpha()
         # 加载启动遮罩背景
-        global_asset["loading_mask"] = pygame.transform.smoothscale(pygame.image.load("Asset/image/loading_mask.png"), ui_manager.get_abs_position((1, 1))).convert_alpha()
+        global_asset["loading_mask"] = pygame.transform.smoothscale(global_asset["res_load_mask"], ui_manager.get_abs_position((1, 1))).convert_alpha()
         # 添加启动页面
         add_page(overlay_page, [loading_screen, {"progress": _progress, "alpha": 0}], 1)
         # 加载字体
         global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", ui_manager.get_abs_position((0, 0.062))[1])
         # 加载消息背景
-        global_asset["message_mask"] = pygame.transform.scale(pygame.image.load("Asset/image/mask.png"), ui_manager.get_abs_position((1, 0.089))).convert_alpha()
+        global_asset["message_mask"] = pygame.transform.scale(global_asset["res_message"], ui_manager.get_abs_position((1, 0.089))).convert_alpha()
         # 移除页面
         if _exit:
             time.sleep(0.3)
@@ -135,8 +152,6 @@ def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygam
     except:
         logger.fatal(traceback.format_exc())
         global_info["exit"] = 3
-
-    return _progress
 
 def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=33, _sigma: float=2) -> pygame.Surface:
     _kernel = []
@@ -218,29 +233,34 @@ def convertor(_setting, _task_id):
             elif global_info["convertor"]["version"] == 1:
                 _profile = global_asset["profile"]["new_java"]
 
+        with open(_setting["file"], "rb") as _io:
+            _midi_reader = MIDIReader(_io)
+            _path_hash = str(hashlib.file_digest(_io, "md5").hexdigest())
+
         if not os.path.exists("Cache/mapping"): os.makedirs("Cache/mapping")
 
-        _midi_reader = MIDIReader(_setting["file"])
-
-        _path_hash = str(hashlib.md5(_setting["file"].encode()).hexdigest())
-        if _path_hash + ".pkl" in os.listdir("Cache/mapping"):
+        try:
             with open("Cache/mapping/" + _path_hash + ".pkl", "rb") as _io:
                 _mapping = pickle.load(_io)
             global_info["message"].append("请调整乐器音色映射方案（已加载缓存方案）")
-        else:
+        except:
+            logger.warn(traceback.format_exc())
             _mapping = {}
             global_info["message"].append("请调整乐器音色映射方案")
 
         _instruments = _midi_reader.scan_instruments()
 
-        _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0, "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": False}
+        _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0, "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": [False]}
         add_page(overlay_page, [adj_mapping_screen, _info])
 
-        while not _info["done"]:
+        while not _info["done"][0]:
             time.sleep(0.2)
 
-        with open("Cache/mapping/" + _path_hash + ".pkl", "wb") as _io:
-            pickle.dump(_mapping, _io, protocol=5)
+        try:
+            with open("Cache/mapping/" + _path_hash + ".pkl", "wb") as _io:
+                pickle.dump(_mapping, _io, protocol=5)
+        except:
+            logger.warn(traceback.format_exc())
 
         _midi_reader.override_mapping(_mapping)
 
@@ -266,12 +286,12 @@ def convertor(_setting, _task_id):
 
                 # 获取游戏中的乐器名称
                 if _data["percussion"]:
-                    _program = _profile["sound_list"].get(global_asset["mapping"]["percussion"].get(str(_data["program"]), global_asset["mapping"]["percussion"]["undefined"]))
+                    _program = _profile["sound_list"].get(global_asset["mapping"]["percussion"].get(str(_data["program"]), global_asset["mapping"]["percussion"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["percussion"]["undefined"]])
                 else:
                     if _data["program"] == -1:
                         _program = _profile["sound_list"][global_asset["mapping"]["default"]]
                     else:
-                        _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data["program"]), global_asset["mapping"]["undefined"]))
+                        _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data["program"]), global_asset["mapping"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["undefined"]])
 
                 _delay_time = 0
                 # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
@@ -291,7 +311,7 @@ def convertor(_setting, _task_id):
                         _note_velocity *= _note[1]
 
                     # Java版不允许音调范围超出0.5~2.0之间
-                    if _setting["edition"] == 1 and not 0.5 <= _pitch <= 2:
+                    if _setting["edition"] == 1 and not 0.5 <= _note_pitch <= 2:
                         continue
 
                     # 将音量限制在100%下
@@ -715,8 +735,8 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
         _text_surface = global_asset["font"].render(global_info["message"][0], True, (255, 255, 255))
         _text_surface.set_alpha(255 * global_info["message_info"][0])
 
-        _text_position = ui_manager.get_abs_position((1, 1.044 - global_info["message_info"][0] * 0.089), True)
-        _root.blit(_text_surface, ((_text_position[0] - _text_surface.get_size()[0]) / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
+        _text_position = ui_manager.get_abs_position((0.5, 1.044 - global_info["message_info"][0] * 0.089), True)
+        _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
 
         if global_info["message_info"][1] <= 3000:
             global_info["message_info"][0] += (1 - global_info["message_info"][0]) * global_info["animation_speed"]
@@ -731,9 +751,15 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
 def watchdog():
     while True:
         if global_info["watch_dog"] >= 30:
-            logger.fatal("Run Timed Out of 3000ms Exceeded!\nProcess is Killed by Watchdog!")
-            logger.done()
-            os._exit(0)
+            try:
+                logger.fatal("Run Timed Out of 3000ms Exceeded!\nProcess is Killed by Watchdog!")
+                logger.done()
+                pygame.quit()
+            except:
+                pass
+            finally:
+                os._exit(0)
+                break
         global_info["watch_dog"] += 1
         time.sleep(0.1)
 
@@ -768,7 +794,7 @@ def set_selector_num(_num: None | int = None) -> None:
 
 def show_download(_title: str, _url: str, _hash: str, _callback=lambda: remove_page(overlay_page)):
     _state = {"state": 0, "downloaded": 0, "total": 0}
-    threading.Thread(target=download, args=(_url, _state, _hash)).start()
+    threading.Thread(target=download, args=(_url, _state, _hash), daemon=True).start()
     add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "time": 0, "done": False, "callback": _callback}])
 
 def reboot_to_update():
@@ -776,7 +802,7 @@ def reboot_to_update():
 
 def start_install_editor():
     remove_page(overlay_page)
-    threading.Thread(target=install_editor).start()
+    threading.Thread(target=install_editor, daemon=True).start()
 
 def install_editor():
     try:
@@ -859,27 +885,7 @@ def start_task(_id: None | int = None) -> None:
         if _id is not None: global_info["setting"]["id"] = _id
         _argument = global_info["convertor"].copy()
         _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
-        threading.Thread(target=convertor, args=(_argument, _id)).start()
-
-def get_inst_text(_data: dict[int, list[tuple[list | int]]], _overriding_mapping: dict[int, dict[int, int]], _channel: int, _index: int) -> str:
-    if _index >= len(_data[_channel]): return ""
-
-    _text = get_time_text(_data[_channel][_index][0][0]) + " - " + get_time_text(_data[_channel][_index][0][1]) + "  |  "
-    _mapping = global_asset["mapping"]["percussion"] if _channel == 9 else global_asset["mapping"]
-    _inst_id = _data[_channel][_index][1]
-
-    if _inst_id == -1:
-        _text += _mapping["default"].upper() + "(D)"
-    else:
-        _text += _mapping.get(str(_inst_id), _mapping["undefined"]).upper() + "(" + str(_inst_id) + ")"
-
-    if _overriding := _overriding_mapping.get(_channel):
-        if _inst_id in _overriding: _text += " ➡ " + str(_mapping[str(_overriding[_inst_id])]).upper()
-
-    return _text
-
-def get_inst_name(_inst_list: list[str], _index: int) -> str:
-    return "" if _index >= len(_inst_list) else _inst_list[_index].upper()
+        threading.Thread(target=convertor, args=(_argument, _id), daemon=True).start()
 
 # GUI页面管理函数
 def add_page(_overlay, _page, _position=0, _back=True):
@@ -896,6 +902,7 @@ def remove_page(_overlay):
 def get_version_list():
     try:
         with requests.get("https://gitee.com/mrdxhmagic/midi-mcstructure_next/raw/master/update.json") as _response:
+            _response.raise_for_status()
             _update_log = _response.json()
 
         _update_list = []
@@ -908,11 +915,7 @@ def get_version_list():
                 case _:
                     logger.info("Unknown API Version: " + str(_i["API"]))
 
-        _length = len(_update_list)
-        for _x in range(_length):
-            for _y in range(_length - _x - 1):
-                if _update_list[_y]["version"] < _update_list[_y + 1]["version"]:
-                    _update_list[_y], _update_list[_y + 1] = _update_list[_y + 1], _update_list[_y]
+        _update_list.sort(key=lambda _i: _i["version"], reverse=True)
 
         for _i in _update_list:
             if _i["edition"] not in global_info["update_list"][0]:
@@ -928,30 +931,28 @@ def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=Tr
     try:
         _state["state"] = 0
 
-        _file_hash = hashlib.md5()
+        _file_hash = ""
         if os.path.exists("Cache/download/" + _file_name) and _target_hash:
             with open("Cache/download/" + _file_name, "rb") as _io:
-                for _data_chunk in iter(lambda: _io.read(4096), b""):
-                    _file_hash.update(_data_chunk)
+                _file_hash = str(hashlib.file_digest(_io, "md5").hexdigest())
 
-        if str(_file_hash.hexdigest()) != _target_hash or not _target_hash:
+        if _file_hash != _target_hash or not _target_hash:
             if os.path.exists("Cache/download"):
                 logger.warn("Cache/download Will be Removed!")
                 shutil.rmtree("Cache/download")
             os.makedirs("Cache/download")
 
             _real_hash = hashlib.md5()
-            _response = requests.get(_url, stream=True)
 
-            _response.raise_for_status()
+            with open("Cache/download/" + _file_name, "ab") as _io:
+                with requests.get(_url, stream=True) as _response:
+                    _response.raise_for_status()
 
-            _state["total"] = int(_response.headers['content-length'])
-
-            with open("Cache/download/" + _file_name, 'ab') as _io:
-                for _data_chunk in _response.iter_content(chunk_size=1024):
-                    _state["downloaded"] += len(_data_chunk)
-                    _real_hash.update(_data_chunk)
-                    _io.write(_data_chunk)
+                    _state["total"] = int(_response.headers["content-length"])
+                    for _data_chunk in _response.iter_content(chunk_size=4096):
+                        _state["downloaded"] += len(_data_chunk)
+                        _real_hash.update(_data_chunk)
+                        _io.write(_data_chunk)
 
             if _target_hash and _target_hash != str(_real_hash.hexdigest()):
                 raise IOError("Broken Package, Please Try Again.")
@@ -991,9 +992,9 @@ def menu_screen(_info, _input):
                 add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}])
                 global_info["convertor"]["file"] = _input["drop_file"]
             case ".mspf":
-                threading.Thread(target=enter_to_editor, args=[_input["drop_file"]]).start()
+                threading.Thread(target=enter_to_editor, args=[_input["drop_file"]], daemon=True).start()
             case _i if _i in (".jpeg", ".jpg", ".png"):
-                threading.Thread(target=reduce_background, args=[_input["drop_file"]]).start()
+                threading.Thread(target=reduce_background, args=[_input["drop_file"]], daemon=True).start()
             case _:
                 global_info["message"].append("不支持的文件格式 " + os.path.basename(_input["drop_file"]))
 
@@ -1101,7 +1102,7 @@ def convertor_screen(_info, _input):
     if "mouse_left" in _input and not _input["mouse_left"]:
         match _id:
             case 0:
-                threading.Thread(target=open_filedialog).start()
+                threading.Thread(target=open_filedialog, daemon=True).start()
             case 1:
                 if global_info["convertor"]["edition"] == -1:
                     global_info["convertor"]["edition"] = 0
@@ -1133,13 +1134,29 @@ def software_setting_screen(_info, _input):
         global_info["new_version"] = False
         remove_page(overlay_page)
 
+    match global_info["setting"]["log_level"]:
+        case 0:
+            _text = "DISABLE"
+        case 1:
+            _text = "FATAL"
+        case 2:
+            _text = "ERROR"
+        case 3:
+            _text = "WARN"
+        case 4:
+            _text = "INFO"
+        case 5:
+            _text = "DEBUG"
+        case _:
+            _text = "未知"
+
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, ("查看更新" + ("（新版本）" if global_info["new_version"] else ""), 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, ("单指令内时间数 " + str(global_info["setting"]["max_selector_num"]), 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, ("界面刷新率 " + (str(global_info["setting"]["fps"]) + "Hz" if global_info["setting"]["fps"] else "无限制"), 0.035, _info["button_state"][2]), 2),
             (0.025, 0.444, 0.95, 0.089, ("动画速度 " + str(global_info["setting"]["animation_speed"]) + "F", 0.035, _info["button_state"][3]), 3),
-            (0.025, 0.578, 0.95, 0.089, ("日志等级 " + str(global_info["setting"]["log_level"]), 0.035, _info["button_state"][4]), 4),
+            (0.025, 0.578, 0.95, 0.089, ("日志等级 " + _text, 0.035, _info["button_state"][4]), 4),
             (0.025, 0.711, 0.95, 0.089, ("自定义背景", 0.035, _info["button_state"][5]), 5),
             (0.025, 0.844, 0.95, 0.089, ("MMS指令编辑器", 0.035, _info["button_state"][6]), 6)
         ),
@@ -1166,9 +1183,9 @@ def software_setting_screen(_info, _input):
                     global_info["setting"]["log_level"] = 0
                 logger.set_log_level(global_info["setting"]["log_level"])
             case 5:
-                threading.Thread(target=reduce_background).start()
+                threading.Thread(target=reduce_background, daemon=True).start()
             case 6:
-                threading.Thread(target=enter_to_editor).start()
+                threading.Thread(target=enter_to_editor, daemon=True).start()
 
     change_button_alpha(_info["button_state"], _id)
 
@@ -1184,8 +1201,8 @@ def version_list_screen(_info, _input):
         _root, _id = ui_manager.apply_ui(
             (
                 (0.025, 0.044, 0.575, 0.089, (_info["edition_info"][0][_info["tag_index"]], 0.035, _info["button_state"][4]), 4),
-                (0.625, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(len(_ver_list)), 0.035, 255), -1),
-                (0.85, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][0]), 0),
+                (0.625, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][0]), 0),
+                (0.7, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(len(_ver_list)), 0.035, 255), -1),
                 (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][1]), 1),
                 (0.025, 0.178, 0.95, 0.089, ("V" + str(_ver_list[_info["index"]]["version"]) + ("-" + str(_ver_list[_info["index"]]["edition"]) if _ver_list[_info["index"]]["edition"] else ""), 0.035, 255), -1),
                 (0.025, 0.311, 0.95, 0.089, ("查看版本详情", 0.035, _info["button_state"][2]), 2),
@@ -1291,71 +1308,90 @@ def download_screen(_info, _input):
     return _root
 
 def adj_mapping_screen(_info, _input):
-    if "mouse_right" in _input and not _input["mouse_right"]:
-        _info["done"] = True
-        remove_page(overlay_page)
-
     _config_length = len(_info["data"][_info["channels"][_info["channel_index"]]])
     _page_num = round_01(_config_length / 6)
+
+    _config_list = []
+    _index_offset = _info["index"] * 6
+    for _n, _i in enumerate((0.178, 0.311, 0.444, 0.578, 0.711, 0.844)):
+        if _n + _index_offset >= _config_length: break
+        _data = _info["data"][_info["channels"][_info["channel_index"]]][_n + _index_offset]
+        _mapping = global_asset["mapping"]["percussion"] if _info["channels"][_info["channel_index"]] == 9 else global_asset["mapping"]
+
+        _text = ""
+        if _data[1] == -1:
+            _text += _mapping["default"].upper() + "(D)"
+        else:
+            _text += _mapping.get(str(_data[1]), _mapping["undefined"]).upper() + "(" + str(_data[1]) + ")"
+
+        if _overriding := _info["mapping"].get(_info["channels"][_info["channel_index"]]):
+            if _data[1] in _overriding: _text += " ➡ " + str(_mapping[str(_overriding[_data[1]])]).upper()
+
+        _config_list.extend(
+            (
+                (0.025, _i, 0.25, 0.089, (get_time_text(_data[0][0]) + " - " + get_time_text(_data[0][1]), 0.035, 255), -1),
+                (0.3, _i, 0.675, 0.089, (_text, 0.035, _info["button_state"][_n + 4]), _n + 4)
+            )
+        )
+
     _root, _id = ui_manager.apply_ui(
         (
-            (0.625, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(_page_num) if _config_length else "无数据", 0.035, 255), -1),
-            (0.025, 0.044, 0.575, 0.089, ("通道 " + str(_info["channels"][_info["channel_index"]] + 1), 0.035, _info["button_state"][0]), 0),
-            (0.85, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][1]), 1),
-            (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.178, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6), 0.035, _info["button_state"][3]), 3),
-            (0.025, 0.311, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 1), 0.035, _info["button_state"][4]), 4),
-            (0.025, 0.444, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 2), 0.035, _info["button_state"][5]), 5),
-            (0.025, 0.578, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 3), 0.035, _info["button_state"][6]), 6),
-            (0.025, 0.711, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 4), 0.035, _info["button_state"][7]), 7),
-            (0.025, 0.844, 0.95, 0.089, (get_inst_text(_info["data"], _info["mapping"], _info["channels"][_info["channel_index"]], _info["index"] * 6 + 5), 0.035, _info["button_state"][8]), 8)
-        )[:(4 + _config_length - _info["index"] * 6) if _page_num == 0 or _info["index"] + 1 == _page_num else 10],
+            (0.025, 0.044, 0.075, 0.089, ("OK", 0.035, _info["button_state"][0]), 0),
+            (0.125, 0.044, 0.475, 0.089, ("通道 " + str(_info["channels"][_info["channel_index"]] + 1), 0.035, _info["button_state"][1]), 1),
+            (0.625, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][2]), 2),
+            (0.7, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(_page_num) if _config_length else "无数据", 0.035, 255), -1),
+            (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][3]), 3)
+        ) + tuple(_config_list),
         pygame.mouse.get_pos()
     )
 
     if "mouse_left" in _input and not _input["mouse_left"]:
         match _id:
             case 0:
+                remove_page(overlay_page)
+                _info["done"][0] = True
+            case 1:
                 _info["channel_index"] += 1
                 if _info["channel_index"] >= len(_info["channels"]):
                     _info["channel_index"] = 0
                 _info["index"] = 0
-            case 1:
+            case 2:
                 _info["index"] -= 1
                 if _info["index"] < 0:
                     _info["index"] = _page_num - 1
-            case 2:
+            case 3:
                 _info["index"] += 1
                 if _info["index"] >= _page_num:
                     _info["index"] = 0
-            case _n if 3 <= _n <= 8:
+            case _n if 4 <= _n <= 9:
                 if _info["channels"][_info["channel_index"]] not in _info["mapping"]: _info["mapping"][_info["channels"][_info["channel_index"]]] = {}
-                add_page(overlay_page, [packing_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "percussion": _info["channels"][_info["channel_index"]] == 9, "mapping": _info["mapping"][_info["channels"][_info["channel_index"]]], "origin": _info["data"][_info["channels"][_info["channel_index"]]][_info["index"] * 6 + _id - 3][1]}])
+                add_page(overlay_page, [packing_screen, {"done": _info["done"], "button_state": [0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "percussion": _info["channels"][_info["channel_index"]] == 9, "mapping": _info["mapping"][_info["channels"][_info["channel_index"]]], "origin": _info["data"][_info["channels"][_info["channel_index"]]][_info["index"] * 6 + _id - 4][1]}])
 
     change_button_alpha(_info["button_state"], _id)
 
     return _root
 
 def packing_screen(_info, _input):
-    if "mouse_right" in _input and not _input["mouse_right"]:
+    if ("mouse_right" in _input and not _input["mouse_right"]) or _info["done"][0]:
         remove_page(overlay_page)
 
     _config = tuple((global_asset["instruments"]["percussion"] if _info["percussion"] else global_asset["instruments"]["other"]).keys())
     _config_length = len(_config)
     _page_num = round_01(_config_length / 6)
+
+    _config_list = []
+    _index_offset = _info["index"] * 6
+    for _n, _i in enumerate((0.178, 0.311, 0.444, 0.578, 0.711, 0.844)):
+        if _n + _index_offset >= _config_length: break
+        _config_list.append((0.025, _i, 0.95, 0.089, ("" if _n + _index_offset >= _config_length else _config[_n + _index_offset].upper(), 0.035, _info["button_state"][_n + 2]), _n + 2))
+
     _root, _id = ui_manager.apply_ui(
         (
-            (0.625, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(_page_num) if _config_length else "无数据", 0.035, 255), -1),
             (0.025, 0.044, 0.575, 0.089, ("打击乐器" if _info["percussion"] else "非打击乐器", 0.035, 255), -1),
-            (0.85, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][0]), 0),
-            (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][1]), 1),
-            (0.025, 0.178, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6), 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.311, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 1), 0.035, _info["button_state"][3]), 3),
-            (0.025, 0.444, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 2), 0.035, _info["button_state"][4]), 4),
-            (0.025, 0.578, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 3), 0.035, _info["button_state"][5]), 5),
-            (0.025, 0.711, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 4), 0.035, _info["button_state"][6]), 6),
-            (0.025, 0.844, 0.95, 0.089, (get_inst_name(_config, _info["index"] * 6 + 5), 0.035, _info["button_state"][7]), 7)
-        )[:(4 + _config_length - _info["index"] * 6) if _page_num == 0 or _info["index"] + 1 == _page_num else 10],
+            (0.625, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][0]), 0),
+            (0.7, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(_page_num) if _config_length else "无数据", 0.035, 255), -1),
+            (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][1]), 1)
+        ) + tuple(_config_list),
         pygame.mouse.get_pos()
     )
 
@@ -1561,7 +1597,7 @@ def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
 def processing_screen(_info, _input):
     return ui_manager.get_blur_background()
 
-global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [[], {}], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 1, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
+global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [[], {}], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 
@@ -1577,7 +1613,7 @@ try:
     timer = pygame.time.Clock()
 
     threading.Thread(target=watchdog).start()
-    threading.Thread(target=asset_load).start()
+    threading.Thread(target=asset_load, daemon=True).start()
 
     while not global_info["exit"]:
         window.fill((0, 0, 0, 255))
@@ -1599,7 +1635,7 @@ try:
             elif evt.type == pygame.DROPFILE:
                 env_list["drop_file"] = evt.file
             elif evt.type == pygame.VIDEORESIZE:
-                threading.Thread(target=change_size, args=[(evt.w, evt.h), True]).start()
+                threading.Thread(target=change_size, args=[(evt.w, evt.h), True], daemon=True).start()
                 window = pygame.display.set_mode((evt.w, evt.h), pygame.RESIZABLE)
 
         global_info["animation_speed"] = timer.get_fps()

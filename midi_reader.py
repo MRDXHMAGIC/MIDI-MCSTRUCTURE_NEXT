@@ -4,20 +4,19 @@ from tools import round_45
 from database import InfoList, TempoList
 
 class MIDIReader:
-    def __init__(self, _path: str):
+    def __init__(self, _io):
         self.midi_file = None
         self.__instruments_mapping = {}
         # 尝试使用UTF-8编码解码MIDI文件
         for _charset in ("utf-8", "latin1"):
             try:
                 # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
-                self.midi_file = mido.MidiFile(_path, charset=_charset, clip=True)
+                self.midi_file = mido.MidiFile(file=_io, charset=_charset, clip=True)
                 break
             except:
                 pass
-
-        if self.midi_file is None:
-            raise IOError("Can't Load MIDI File: " + str(_path))
+        else:
+            raise IOError("Can't Load MIDI File!")
 
     def scan_instruments(self):
         _channel_info = {}
@@ -109,7 +108,7 @@ class MIDIReader:
                     _value = _message.value
                     # 通道音量控制器，调整某个通道音量
                     if _message.control == 7:
-                        _channel_info[_channel]["volume"].add_info(_time, _value)
+                        _channel_info[_channel]["volume"].add_info(_time, _value / 127)
                     # 通道声像控制器
                     elif _message.control == 10:
                         _radian = math.radians(_value * 1.40625)
