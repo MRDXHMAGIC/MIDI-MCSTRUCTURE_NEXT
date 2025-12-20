@@ -112,17 +112,16 @@ def asset_load() -> None:
             logger.warn("No Structure File!")
 
         logger.debug("Loading Profile...")
-        _result = load_profile()
+        if load_profile():
+            global_info["message"].insert(0, "小提示：使用鼠标左右键来进入或返回页面！")
+        else:
+            global_info["message"].append("无法加载配置文件，已加载默认配置文件！")
 
         logger.debug("Initialized Successfully!")
         time.sleep(1)
 
-        if _result:
-            global_info["message"].append("小提示：使用鼠标左右键来进入或返回页面！")
-        else:
-            global_info["message"].append("无法加载配置文件，已加载默认配置文件！")
-
         remove_page(overlay_page)
+        global_info["message_info"][2] = True
         add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0]}], 0, False)
     except:
         global_info["exit"] = 3
@@ -512,6 +511,43 @@ def convertor(_setting, _task_id):
                         else:
                             shutil.copytree("Cache/convertor/function_pack", _save_path + ("-" + str(_n) if _n else ""))
                             break
+        elif _setting["output_format"] == 2:
+            _delay = 0
+            _buffer = []
+            for _cmd in cmd_convertor(_setting, _profile, _result, _task_id, _time_offset, (True if _setting["command_type"] == 0 else False)):
+                if _cmd.startswith("# tick_delay="):
+                    _delay = int(_cmd[13:])
+                else:
+                    _buffer.append([_delay, _cmd])
+
+            with py7zr.SevenZipFile("Cache/mcpack/" + os.listdir("Cache/mcpack")[0], "r") as _io:
+                _io.extractall("Cache/convertor")
+
+            with open("Cache/convertor/scripts/main.js", "r", encoding="utf-8") as _io:
+                _code = _io.read()
+
+            with open("Cache/convertor/scripts/main.js", "w", encoding="utf-8") as _io:
+                _io.write(_code.replace("{SOUND_NAME}", _music_name, 1).replace("{SOUND_DATA}", json.dumps(_buffer), 1))
+
+            with open("Cache/convertor/manifest.json", "rb") as _io:
+                _manifest_file = json.loads(_io.read())
+
+            _manifest_file["header"]["name"] = _music_name
+            _manifest_file["header"]["uuid"] = "-".join((uuid(8), uuid(4), uuid(4), uuid(4), uuid(12)))
+            _manifest_file["modules"][0]["uuid"] = "-".join((uuid(8), uuid(4), uuid(4), uuid(4), uuid(12)))
+
+            with open("Cache/convertor/manifest.json", "w", encoding="utf-8") as _io:
+                _io.write(json.dumps(_manifest_file))
+
+            if _save_path := filedialog.askdirectory(title="MIDI-MCSTRUCTURE NEXT"):
+                _save_path += "/" + _music_name
+                _n = 0
+                while True:
+                    if os.path.exists(_save_path + ("-" + str(_n) if _n else "")):
+                        _n += 1
+                    else:
+                        shutil.copytree("Cache/convertor", _save_path + ("-" + str(_n) if _n else ""))
+                        break
     except:
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         logger.error(traceback.format_exc())
@@ -743,7 +779,7 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
         if _overlay[_n][2] == 0:
             del _overlay[_n]
 
-    if global_info["message"]:
+    if global_info["message"] and global_info["message_info"][2]:
         global_info["message_info"][1] += timer.get_time()
 
         _root.blit(global_asset["message_mask"], ui_manager.get_abs_position((0, 1 - global_info["message_info"][0] * 0.089), True))
@@ -761,23 +797,20 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
 
             if global_info["message_info"][0] < 0.01:
                 del global_info["message"][0]
-                global_info["message_info"] = [0, 0]
+                global_info["message_info"] = [0, 0, True]
 
 # 功能函数
 def watchdog():
-    while True:
-        if global_info["watch_dog"] >= 30:
-            try:
+    try:
+        while True:
+            if global_info["watch_dog"] >= 30:
                 logger.fatal("Run Timed Out of 3000ms Exceeded!\nProcess is Killed by Watchdog!")
                 logger.done()
-                pygame.quit()
-            except:
-                pass
-            finally:
-                os._exit(0)
                 break
-        global_info["watch_dog"] += 1
-        time.sleep(0.1)
+            global_info["watch_dog"] += 1
+            time.sleep(0.1)
+    finally:
+        os._exit(1)
 
 def change_button_alpha(_state: list[float], _index: int) -> None:
     for _n in range(len(_state)):
@@ -928,6 +961,9 @@ def get_version_list():
                     _update_list.append(_i)
                 case 1:
                     if _i["version"] > global_info["editor_update"]["version"]: global_info["editor_update"] = _i
+                case 2:
+                    global_info["mcpack_update"][0] = _i["hash"]
+                    global_info["mcpack_update"][1] = _i["download_url"]
                 case _:
                     logger.info("Unknown API Version: " + str(_i["API"]))
 
@@ -1002,7 +1038,7 @@ def update_mcpack():
                     os.makedirs("Cache/mcpack")
 
                     _real_hash = hashlib.md5()
-                    with open("Cache/download/" + global_info["mcpack_update"][0], "ab") as _io:
+                    with open("Cache/mcpack/" + global_info["mcpack_update"][0] + ".7z", "ab") as _io:
                         with requests.get(global_info["mcpack_update"][1], stream=True) as _response:
                             _response.raise_for_status()
 
@@ -1086,7 +1122,9 @@ def convertor_screen(_info, _input):
 
     if global_info["convertor"]["edition"] == 0:
         _ver_text = "基岩版"
-        if global_info["convertor"]["version"] == 0:
+        if global_info["convertor"]["output_format"] == 2:
+            _ver_text += "（SAPI > 2.0）"
+        elif global_info["convertor"]["version"] == 0:
             _ver_text += "（1.19.50以下）"
         elif global_info["convertor"]["version"] == 1:
             _ver_text += "（1.19.50以上）"
@@ -1104,15 +1142,22 @@ def convertor_screen(_info, _input):
             _base_text = "mcstructure"
         elif global_info["convertor"]["output_format"] == 1:
             _base_text = "mcfunction"
+        elif global_info["convertor"]["output_format"] == 2:
+            _base_text = "SAPI BehaviorPackage"
         else:
             _base_text = ""
-        if global_info["convertor"]["command_type"] == 0:
+
+        if global_info["convertor"]["output_format"] == 2:
+            pass
+        elif global_info["convertor"]["command_type"] == 0:
             _base_text += "/命令链延迟"
         elif global_info["convertor"]["command_type"] == 1:
             _base_text += "/计分板时钟"
         elif global_info["convertor"]["command_type"] == 2:
             _base_text += "/时钟与编号"
+
         if global_info["convertor"]["volume"]: _base_text += "/" + str(global_info["convertor"]["volume"]) + "%"
+
         if global_asset["structure"] and global_info["convertor"]["output_format"] == 0: _base_text += "/" + os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0]
     else:
         _base_text = "基本设置"
@@ -1468,10 +1513,10 @@ def setting_screen(_info, _input):
 
     _root, _id = ui_manager.apply_ui(
         (
-            (0.025, 0.044, 0.95, 0.089, ("输出格式 " + ["mcstructure", "mcfunction"][global_info["convertor"]["output_format"]], 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("播放模式 " + ["命令链延迟", "计分板时钟", "时钟与编号"][global_info["convertor"]["command_type"]], 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.044, 0.95, 0.089, ("输出格式 " + ["mcstructure", "mcfunction", "SAPI BehaviorPackage"][global_info["convertor"]["output_format"]], 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("播放模式 " + (["命令链延迟", "计分板时钟", "时钟与编号"][global_info["convertor"]["command_type"]] if global_info["convertor"]["output_format"] != 2 else "不可用"), 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, ("平均音量 " + (str(global_info["convertor"]["volume"]) + "%" if global_info["convertor"]["volume"] else "保持原始音量"), 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.444, 0.95, 0.089, ("结构模板 " + os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0] if global_info["convertor"]["output_format"] == 0 and global_asset["structure"] else "不可用", 0.035, _info["button_state"][3]), 3)
+            (0.025, 0.444, 0.95, 0.089, ("结构模板 " + (os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0] if global_info["convertor"]["output_format"] == 0 and global_asset["structure"] else "不可用"), 0.035, _info["button_state"][3]), 3)
         ),
         pygame.mouse.get_pos()
     )
@@ -1481,19 +1526,28 @@ def setting_screen(_info, _input):
     if "mouse_left" in _input and not _input["mouse_left"]:
         match _id:
             case 0:
-                if global_info["convertor"]["output_format"] == 0 or global_info["convertor"]["edition"] == 1:
+                global_info["convertor"]["output_format"] += 1
+                if global_info["convertor"]["output_format"] > 2:
+                    global_info["convertor"]["output_format"] = 0
+
+                if global_info["convertor"]["output_format"] == 2:
+                    global_info["convertor"]["command_type"] = 0
+                    global_info["convertor"]["version"] = 1
+
+                if global_info["convertor"]["edition"] == 1:
                     global_info["convertor"]["output_format"] = 1
                     if global_info["convertor"]["command_type"] == 0:
                         global_info["convertor"]["command_type"] = 1
-                else:
-                    global_info["convertor"]["output_format"] = 0
             case 1:
-                global_info["convertor"]["command_type"] += 1
-                if global_info["convertor"]["command_type"] >= 3:
-                    if global_info["convertor"]["output_format"] == 0:
-                        global_info["convertor"]["command_type"] = 0
-                    else:
-                        global_info["convertor"]["command_type"] = 1
+                if global_info["convertor"]["output_format"] == 2:
+                    global_info["convertor"]["command_type"] = 0
+                else:
+                    global_info["convertor"]["command_type"] += 1
+                    if global_info["convertor"]["command_type"] >= 3:
+                        if global_info["convertor"]["output_format"] == 0:
+                            global_info["convertor"]["command_type"] = 0
+                        else:
+                            global_info["convertor"]["command_type"] = 1
             case 2:
                 global_info["convertor"]["volume"] += 10
                 if global_info["convertor"]["volume"] >= 110:
@@ -1501,7 +1555,7 @@ def setting_screen(_info, _input):
             case 3:
                 if global_info["convertor"]["output_format"] == 0:global_info["convertor"]["structure"] += 1
                 if global_info["convertor"]["structure"] >= len(global_asset["structure"]): global_info["convertor"]["structure"] = 0
-        if global_info["convertor"]["output_format"] == 0: global_info["convertor"]["compression"] = False
+        if global_info["convertor"]["command_type"] == 0: global_info["convertor"]["compression"] = False
 
     return _root
 
@@ -1571,7 +1625,7 @@ def game_edition_screen(_info, _input):
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, ("游戏版本 " + ["基岩版", "Java版"][global_info["convertor"]["edition"]], 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("指令语法 " + ["1.19.50/1.13以下", "1.19.50/1.13以上"][global_info["convertor"]["version"]], 0.035, _info["button_state"][1]), 1)
+            (0.025, 0.177, 0.95, 0.089, ("指令语法 " + ["1.19.50/1.13以下", "1.19.50/1.13以上"][global_info["convertor"]["version"]], 0.035, _info["button_state"][1]) if global_info["convertor"]["output_format"] != 2 else ("SAPI > 2.0", 0.035, 255), 1)
         ),
         pygame.mouse.get_pos()
     )
@@ -1589,7 +1643,7 @@ def game_edition_screen(_info, _input):
                 else:
                     global_info["convertor"]["edition"] = 0
             case 1:
-                if global_info["convertor"]["version"] == 0:
+                if global_info["convertor"]["version"] == 0 or global_info["convertor"]["output_format"] == 2:
                     global_info["convertor"]["version"] = 1
                 else:
                     global_info["convertor"]["version"] = 0
@@ -1645,7 +1699,7 @@ def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
 def processing_screen(_info, _input):
     return ui_manager.get_blur_background()
 
-global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [[], {}], "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
+global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 
