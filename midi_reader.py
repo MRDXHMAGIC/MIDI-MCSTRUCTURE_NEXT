@@ -4,14 +4,14 @@ from tools import round_45
 from database import InfoList, TempoList
 
 class MIDIReader:
-    def __init__(self, _io):
+    def __init__(self, _path: str):
         self.midi_file = None
         self.__instruments_mapping = {}
         # 尝试使用UTF-8编码解码MIDI文件
         for _charset in ("utf-8", "latin1"):
             try:
                 # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
-                self.midi_file = mido.MidiFile(file=_io, charset=_charset, clip=True)
+                self.midi_file = mido.MidiFile(_path, charset=_charset, clip=True)
                 break
             except:
                 pass

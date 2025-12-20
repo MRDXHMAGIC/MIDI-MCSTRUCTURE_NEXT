@@ -263,7 +263,7 @@ wheels = [
 
 [[package]]
 name = "midi-mcsstructure-next"
-version = "1.6.0"
+version = "1.6.2"
 source = { virtual = "." }
 dependencies = [
     { name = "amulet-nbt" },

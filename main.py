@@ -234,8 +234,9 @@ def convertor(_setting, _task_id):
                 _profile = global_asset["profile"]["new_java"]
 
         with open(_setting["file"], "rb") as _io:
-            _midi_reader = MIDIReader(_io)
             _path_hash = str(hashlib.file_digest(_io, "md5").hexdigest())
+
+        _midi_reader = MIDIReader(_setting["file"])
 
         if not os.path.exists("Cache/mapping"): os.makedirs("Cache/mapping")
 
@@ -453,27 +454,41 @@ def convertor(_setting, _task_id):
                     _manifest_file = json.loads(_io.read())
 
                 _manifest_file["header"]["name"] = _music_name
-                _manifest_file["header"]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(12)
-                _manifest_file["modules"][0]["uuid"] = uuid(8) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(4) + "-" + uuid(12)
+                if _setting["version"] == 1: _manifest_file["header"]["min_engine_version"] = [1, 19, 50]
+                _manifest_file["header"]["uuid"] = "-".join((uuid(8), uuid(4), uuid(4), uuid(4), uuid(12)))
+                _manifest_file["modules"][0]["uuid"] = "-".join((uuid(8), uuid(4), uuid(4), uuid(4), uuid(12)))
 
                 _behavior_file = [
-                    {"pack_id": _manifest_file["header"]["uuid"], "version": _manifest_file["header"]["version"]}]
+                    {
+                        "pack_id": _manifest_file["header"]["uuid"],
+                        "version": _manifest_file["header"]["version"]
+                    }
+                ]
 
-                shutil.copyfile("Cache/convertor/function.mcfunction",
-                                "Cache/convertor/function_pack/functions/midi_player.mcfunction")
+                shutil.copyfile(
+                    "Cache/convertor/function.mcfunction",
+                    "Cache/convertor/function_pack/functions/midi_player.mcfunction"
+                )
 
                 with open("Cache/convertor/function_pack/manifest.json", "w") as _io:
                     _io.write(json.dumps(_manifest_file))
 
                 with open("Cache/convertor/function_pack/world_behavior_packs.json", "w") as _io:
                     _io.write(json.dumps(_behavior_file))
+
+                shutil.copyfile(
+                    "Asset/image/icon.png",
+                    "Cache/convertor/function_pack/pack_icon.png"
+                )
             elif _setting["edition"] == 1:
                 os.makedirs("Cache/convertor/function_pack/data/mms/functions")
 
                 _behavior_file = {"pack": {"pack_format": 1, "description": "§r§fBy §dMIDI-MCSTRUCTURE §bNEXT"}}
 
-                shutil.copyfile("Cache/convertor/function.mcfunction",
-                                "Cache/convertor/function_pack/data/mms/functions/midi_player.mcfunction")
+                shutil.copyfile(
+                    "Cache/convertor/function.mcfunction",
+                    "Cache/convertor/function_pack/data/mms/functions/midi_player.mcfunction"
+                )
 
                 with open("Cache/convertor/function_pack/pack.mcmeta", "w") as _io:
                     _io.write(json.dumps(_behavior_file))
@@ -1155,7 +1170,7 @@ def software_setting_screen(_info, _input):
             (0.025, 0.044, 0.95, 0.089, ("查看更新" + ("（新版本）" if global_info["new_version"] else ""), 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, ("单指令内时间数 " + str(global_info["setting"]["max_selector_num"]), 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, ("界面刷新率 " + (str(global_info["setting"]["fps"]) + "Hz" if global_info["setting"]["fps"] else "无限制"), 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.444, 0.95, 0.089, ("动画速度 " + str(global_info["setting"]["animation_speed"]) + "F", 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.444, 0.95, 0.089, ("动画速度 " + (str(global_info["setting"]["animation_speed"]) if global_info["setting"]["animation_speed"] != 0 else "禁用"), 0.035, _info["button_state"][3]), 3),
             (0.025, 0.578, 0.95, 0.089, ("日志等级 " + _text, 0.035, _info["button_state"][4]), 4),
             (0.025, 0.711, 0.95, 0.089, ("自定义背景", 0.035, _info["button_state"][5]), 5),
             (0.025, 0.844, 0.95, 0.089, ("MMS指令编辑器", 0.035, _info["button_state"][6]), 6)
@@ -1603,7 +1618,7 @@ overlay_page = []
 
 pygame.display.init()
 pygame.display.set_caption("MIDI-MCSTRUCTURE NEXT  GUI")
-pygame.display.set_icon(pygame.image.load("Asset/image/icon.ico"))
+pygame.display.set_icon(pygame.image.load("Asset/image/icon.png"))
 window = pygame.display.set_mode((800, 450), pygame.RESIZABLE)
 
 logger = log.Logger(5)
