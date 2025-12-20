@@ -6,6 +6,11 @@
     "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V10251006-Beta/ProfileEditor.7z"
   },
   {
+    "API": 2,
+    "hash": "8b223d7fbcb5a8dc951669036dd93b59",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V16251221-RC/Player_Extention.7z"
+  },
+  {
     "API": 0,
     "hash": "137b6fe68b113d3e5cd4188583ad0183",
     "version": 10250716,

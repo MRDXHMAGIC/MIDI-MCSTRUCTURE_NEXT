@@ -34,6 +34,7 @@ def asset_load() -> None:
 
         if not global_info["setting"]["disable_update_check"]:
             threading.Thread(target=get_version_list, daemon=True).start()
+            threading.Thread(target=update_mcpack, daemon=True).start()
         else:
             logger.info("Disable Update Check")
 
@@ -470,10 +471,10 @@ def convertor(_setting, _task_id):
                     "Cache/convertor/function_pack/functions/midi_player.mcfunction"
                 )
 
-                with open("Cache/convertor/function_pack/manifest.json", "w") as _io:
+                with open("Cache/convertor/function_pack/manifest.json", "w", encoding="utf-8") as _io:
                     _io.write(json.dumps(_manifest_file))
 
-                with open("Cache/convertor/function_pack/world_behavior_packs.json", "w") as _io:
+                with open("Cache/convertor/function_pack/world_behavior_packs.json", "w", encoding="utf-8") as _io:
                     _io.write(json.dumps(_behavior_file))
 
                 shutil.copyfile(
@@ -490,7 +491,7 @@ def convertor(_setting, _task_id):
                     "Cache/convertor/function_pack/data/mms/functions/midi_player.mcfunction"
                 )
 
-                with open("Cache/convertor/function_pack/pack.mcmeta", "w") as _io:
+                with open("Cache/convertor/function_pack/pack.mcmeta", "w", encoding="utf-8") as _io:
                     _io.write(json.dumps(_behavior_file))
 
             if _setting["version"] == 0 and _setting["edition"] == 1:
@@ -987,6 +988,38 @@ def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=Tr
         _state["state"] = -1
     finally:
         if _state["state"] != -1: _state["state"] = 2
+
+def update_mcpack():
+    try:
+        while True:
+            if global_info["mcpack_update"][0]:
+                if os.path.exists("Cache/mcpack/" + global_info["mcpack_update"][0] + ".7z"):
+                    logger.info("Behavior Package is the Lasest Version!")
+                else:
+                    logger.info("Try to update Behavior Package")
+                    if os.path.exists("Cache/mcpack"):
+                        shutil.rmtree("Cache/mcpack")
+                    os.makedirs("Cache/mcpack")
+
+                    _real_hash = hashlib.md5()
+                    with open("Cache/download/" + global_info["mcpack_update"][0], "ab") as _io:
+                        with requests.get(global_info["mcpack_update"][1], stream=True) as _response:
+                            _response.raise_for_status()
+
+                            for _data_chunk in _response.iter_content(chunk_size=1024):
+                                _real_hash.update(_data_chunk)
+                                _io.write(_data_chunk)
+
+                    if global_info["mcpack_update"][0] != str(_real_hash.hexdigest()):
+                        raise IOError("Broken Package, Please Try Again.")
+
+                    global_info["message"].append("行为包模板更新成功！")
+                break
+            else:
+                time.sleep(1)
+    except:
+        logger.warn(traceback.format_exc())
+        global_info["message"].append("MMS检测到行为包模板更新，但因某些原因无法更新")
 
 # 各种函数（用于GUI）
 def loading_screen(_info, _input) -> pygame.Surface:
@@ -1612,7 +1645,7 @@ def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
 def processing_screen(_info, _input):
     return ui_manager.get_blur_background()
 
-global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [[], {}], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
+global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0], "new_version": False, "update_list": [[], {}], "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

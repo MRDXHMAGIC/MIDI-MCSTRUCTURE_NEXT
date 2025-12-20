@@ -1,5 +1,9 @@
 {
   "format_version": 2,
+  "metadata": {
+    "authors": ["MRDXHMAGIC", "Generated With MMS-NEXT"],
+    "url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next"
+  },
   "header": {
     "name": "",
     "description": "§r§fBy §dMIDI-MCSTRUCTURE §bNEXT",
@@ -8,10 +12,6 @@
     "min_engine_version": [1, 0, 0]
   },
   "modules": [
-    {
-      "version": [1, 0, 0],
-      "type": "data",
-      "uuid": ""
-    }
+    {"version": [1, 0, 0], "type": "data", "uuid": ""}
   ]
 }
