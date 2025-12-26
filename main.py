@@ -512,18 +512,22 @@ def convertor(_setting, _task_id):
                             shutil.copytree("Cache/convertor/function_pack", _save_path + ("-" + str(_n) if _n else ""))
                             break
         elif _setting["output_format"] == 2:
-            _delay = _time_offset
+            _last = _time_offset
             _buffer = []
             for _k in sorted(_result.keys()):
-                for _note in _result[_k]:
+                for _n, _note in enumerate(_result[_k]):
+                    if _n == 0:
+                        _delay = _k - _last
+                    else:
+                        _delay = 0
                     match _note:
                         case {"type": "note", "program": _sound, "pitch": _pitch, "velocity": _volume, "panning": (_x, _y)}:
-                            _buffer.append([_k - _delay, "n", _sound, _pitch, _volume, _x, _y])
+                            _buffer.append([_delay, "n", _sound, _pitch, _volume, _x, _y])
                         case {"type": "lyrics", "last": _last, "real_f": _rf, "real_s": _rs, "next": _next}:
-                            _buffer.append([_k - _delay, "l", _last, _rf, _rs, _next])
+                            _buffer.append([_delay, "l", _last, _rf, _rs, _next])
                         case _:
                             raise TypeError("Unknown Data Type: " + _note["type"])
-                _delay = _k
+                _last = _k
 
             with py7zr.SevenZipFile("Cache/mcpack/" + os.listdir("Cache/mcpack")[0], "r") as _io:
                 _io.extractall("Cache/convertor")
