@@ -512,13 +512,18 @@ def convertor(_setting, _task_id):
                             shutil.copytree("Cache/convertor/function_pack", _save_path + ("-" + str(_n) if _n else ""))
                             break
         elif _setting["output_format"] == 2:
-            _delay = 0
+            _delay = _time_offset
             _buffer = []
-            for _cmd in cmd_convertor(_setting, _profile, _result, _task_id, _time_offset, (True if _setting["command_type"] == 0 else False)):
-                if _cmd.startswith("# tick_delay="):
-                    _delay = int(_cmd[13:])
-                else:
-                    _buffer.append([_delay, _cmd])
+            for _k in sorted(_result.keys()):
+                for _note in _result[_k]:
+                    match _note:
+                        case {"type": "note", "program": _sound, "pitch": _pitch, "velocity": _volume, "panning": (_x, _y)}:
+                            _buffer.append([_k - _delay, "n", _sound, _pitch, _volume, _x, _y])
+                        case {"type": "lyrics", "last": _last, "real_f": _rf, "real_s": _rs, "next": _next}:
+                            _buffer.append([_k - _delay, "l", _last, _rf, _rs, _next])
+                        case _:
+                            raise TypeError("Unknown Data Type: " + _note["type"])
+                _delay = _k
 
             with py7zr.SevenZipFile("Cache/mcpack/" + os.listdir("Cache/mcpack")[0], "r") as _io:
                 _io.extractall("Cache/convertor")
@@ -1123,7 +1128,7 @@ def convertor_screen(_info, _input):
     if global_info["convertor"]["edition"] == 0:
         _ver_text = "基岩版"
         if global_info["convertor"]["output_format"] == 2:
-            _ver_text += "（SAPI > 2.0）"
+            _ver_text += "（测试版SAPI）"
         elif global_info["convertor"]["version"] == 0:
             _ver_text += "（1.19.50以下）"
         elif global_info["convertor"]["version"] == 1:
@@ -1143,7 +1148,7 @@ def convertor_screen(_info, _input):
         elif global_info["convertor"]["output_format"] == 1:
             _base_text = "mcfunction"
         elif global_info["convertor"]["output_format"] == 2:
-            _base_text = "SAPI BehaviorPackage"
+            _base_text = "SAPI行为包"
         else:
             _base_text = ""
 
@@ -1513,8 +1518,8 @@ def setting_screen(_info, _input):
 
     _root, _id = ui_manager.apply_ui(
         (
-            (0.025, 0.044, 0.95, 0.089, ("输出格式 " + ["mcstructure", "mcfunction", "SAPI BehaviorPackage"][global_info["convertor"]["output_format"]], 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("播放模式 " + (["命令链延迟", "计分板时钟", "时钟与编号"][global_info["convertor"]["command_type"]] if global_info["convertor"]["output_format"] != 2 else "不可用"), 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.044, 0.95, 0.089, ("输出格式 " + ["mcstructure", "mcfunction", "SAPI行为包"][global_info["convertor"]["output_format"]], 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("播放模式 " + (["命令链延迟", "计分板时钟", "时钟与编号"][global_info["convertor"]["command_type"]] if global_info["convertor"]["output_format"] != 2 else ("SAPI" if global_info["convertor"]["output_format"] == 2 else "不可用")), 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, ("平均音量 " + (str(global_info["convertor"]["volume"]) + "%" if global_info["convertor"]["volume"] else "保持原始音量"), 0.035, _info["button_state"][2]), 2),
             (0.025, 0.444, 0.95, 0.089, ("结构模板 " + (os.path.splitext(global_asset["structure"][global_info["convertor"]["structure"]])[0] if global_info["convertor"]["output_format"] == 0 and global_asset["structure"] else "不可用"), 0.035, _info["button_state"][3]), 3)
         ),
@@ -1625,7 +1630,7 @@ def game_edition_screen(_info, _input):
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, ("游戏版本 " + ["基岩版", "Java版"][global_info["convertor"]["edition"]], 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("指令语法 " + ["1.19.50/1.13以下", "1.19.50/1.13以上"][global_info["convertor"]["version"]], 0.035, _info["button_state"][1]) if global_info["convertor"]["output_format"] != 2 else ("SAPI > 2.0", 0.035, 255), 1)
+            (0.025, 0.177, 0.95, 0.089, ("指令语法 " + ["1.19.50/1.13以下", "1.19.50/1.13以上"][global_info["convertor"]["version"]], 0.035, _info["button_state"][1]) if global_info["convertor"]["output_format"] != 2 else ("测试版SAPI", 0.035, 255), 1)
         ),
         pygame.mouse.get_pos()
     )
