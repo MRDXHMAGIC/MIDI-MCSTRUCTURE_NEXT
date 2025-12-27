@@ -539,13 +539,14 @@ def convertor(_setting, _task_id):
                                                               filetypes=[("Function Files", ".mcfunction")],
                                                               defaultextension=".mcfunction"):
                     if os.path.exists(_save_path): os.remove(_save_path)
-                    shutil.copyfile("Cache/convertor/function.mcfunction", _save_path)
+                    shutil.copyfile("Cache/convertor/convertor/function.mcfunction", _save_path)
             else:
                 if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
                                                               filetypes=[("ZIP Files", ".zip")],
-                                                              initialfile=_music_name, defaultextension=".zip"):
+                                                              initialfile=_music_name,
+                                                              defaultextension=".zip"):
                     if os.path.exists(_save_path): os.remove(_save_path)
-                    shutil.make_archive(_save_path, "zip", "Cache/convertor/function_pack")
+                    shutil.make_archive(os.path.splitext(_save_path)[0], "zip", "Cache/convertor/function_pack")
         elif _setting["output_format"] == 2:
             _last = _time_offset
             _buffer = []
@@ -582,12 +583,13 @@ def convertor(_setting, _task_id):
             with open("Cache/convertor/manifest.json", "w", encoding="utf-8") as _io:
                 _io.write(json.dumps(_manifest_file))
 
+            shutil.make_archive("Cache/convertor/package", "zip", "Cache/convertor")
             if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
-                                                          filetypes=[("ZIP Files", ".zip")],
+                                                          filetypes=[("MCPACK Files", ".mcpack")],
                                                           initialfile=_music_name,
-                                                          defaultextension=".zip"):
+                                                          defaultextension=".mcpack"):
                 if os.path.exists(_save_path): os.remove(_save_path)
-                shutil.make_archive(_save_path, "zip", "Cache/convertor")
+                shutil.copyfile("Cache/convertor/package.zip", _save_path)
     except:
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         logger.error(traceback.format_exc())

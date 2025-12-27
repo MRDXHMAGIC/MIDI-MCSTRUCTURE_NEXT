@@ -52,18 +52,17 @@ with tarfile.open(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}.tar.zst", "w:zst", option
 
 edition_info = {
     "API": 3,
-    "tips": "",
+    "tips": input("Tips: "),
     "version": setting["version"],
     "edition": setting["edition"],
     "download_url": f"https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/{TITLE}/MIDI-MCSTRUCTURE_NEXT_{TITLE}.tar.zst",
     "description_url": f"https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/{TITLE}"
 }
 
+print()
+
 with open("update.json", "rb") as io:
     update_log = json.loads(io.read())
-
-edition_info["tips"] = input("Tips: ")
-print()
 
 for n in range(len(update_log)):
     if update_log[n]["API"] != edition_info["API"]:
