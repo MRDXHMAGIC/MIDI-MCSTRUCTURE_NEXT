@@ -1,5 +1,7 @@
 # MIDI-MCSTRUCTURE_NEXT
-![MMS ICON](icon.png)
+
+
+![MMS LOGO](Asset/image/logo.png)
 
 #### 介绍
 MIDI音乐转为mcstructure或mcfunction。
