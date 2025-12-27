@@ -104,7 +104,8 @@ class UIManager:
                 _text_surf = self.__font_cache[_text_size].render(_label[4][0], True, (255, 255, 255))
                 _text_surf.set_alpha(_label[4][2])
                 _text_surf_size = _text_surf.get_size()
-                _text_surf_array.append((_text_surf, (int(round_45((_label[0] + _label[2] / 2) - _text_surf_size[0] / 2)) + self.__window_offset[0], int(round_45((_label[1] + _label[3] / 2) - _text_surf_size[1] / 2)) + self.__window_offset[1])))
+                _text_surf_array.append((_text_surf, (int(round_45((_label[0] + _label[2] / 2) - _text_surf_size[0] / 2)) + self.__window_offset[0], int(round_45((_label[1] + _label[3] / 2) - self.__font_cache[_text_size].get_height() / 2)) + self.__window_offset[1])))
+
         _root = self.__get_surf(tuple(_label_array))
         _root.blits(_text_surf_array)
         return _root, _id

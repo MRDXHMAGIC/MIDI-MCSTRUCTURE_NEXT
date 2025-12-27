@@ -3,10 +3,10 @@ import log
 import math
 import json
 import time
-import py7zr
 import pickle
 import shutil
 import pygame
+import tarfile
 import hashlib
 import requests
 import threading
@@ -19,6 +19,52 @@ from database import LyricsList
 from ui_manager import UIManager
 from midi_reader import MIDIReader
 
+
+class NetStream:
+    def __init__(self, _url: str):
+        self.size = 0
+        self.__md5 = hashlib.md5()
+        self.__buffer = b""
+        self.__stream = None
+        self.__position = 0
+        self.__response = requests.get(_url, stream=True)
+
+        self.__response.raise_for_status()
+
+        self.size = int(self.__response.headers["content-length"])
+    def __enter__(self):
+        self.__stream = self.__response.__enter__().iter_content(4096)
+        return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.__response.__exit__(exc_type, exc_val, exc_tb)
+    def __bool__(self):
+        return True
+    def seekable(self):
+        return False
+    def readable(self):
+        return self.__stream is not None
+    def get_md5(self):
+        return str(self.__md5.hexdigest())
+    def tell(self):
+        return self.__position
+    def read(self, _size: int = -1):
+        if _size == -1:
+            _data, self.__buffer = self.__buffer, b""
+            for _chunk in self.__stream:
+                _data += _chunk
+        else:
+            while len(self.__buffer) < _size:
+                try:
+                    self.__buffer += next(self.__stream)
+                except StopIteration:
+                    self.__stream = None
+                    break
+            _data, self.__buffer = self.__buffer[:_size], self.__buffer[_size:]
+
+        self.__position += len(_data)
+        self.__md5.update(_data)
+
+        return _data
 
 # 加载资源函数
 def asset_load() -> None:
@@ -34,7 +80,6 @@ def asset_load() -> None:
 
         if not global_info["setting"]["disable_update_check"]:
             threading.Thread(target=get_version_list, daemon=True).start()
-            threading.Thread(target=update_mcpack, daemon=True).start()
         else:
             logger.info("Disable Update Check")
 
@@ -122,7 +167,8 @@ def asset_load() -> None:
 
         remove_page(overlay_page)
         global_info["message_info"][2] = True
-        add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0]}], 0, False)
+        show_download("test", "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/MIDI-MCSTRUCTURE_NEXT_V17251222-Alpha.tar.zst", _hash="61233ae31818e2d038694e18e9cf55c9")
+        # add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0]}], 0, False)
     except:
         global_info["exit"] = 3
         logger.error(traceback.format_exc())
@@ -436,8 +482,7 @@ def convertor(_setting, _task_id):
                                                           initialfile=_music_name + "-" + uuid(6).upper(),
                                                           filetypes=[("Structure Files", ".mcstructure")],
                                                           defaultextension=".mcstructure"):
-                if os.path.exists(_save_path):
-                    os.remove(_save_path)
+                if os.path.exists(_save_path): os.remove(_save_path)
                 shutil.copyfile("Cache/convertor/structure.mcstructure", _save_path)
         elif _setting["output_format"] == 1:
             if _setting["command_type"] == 0:
@@ -498,19 +543,14 @@ def convertor(_setting, _task_id):
                                                               initialfile=_music_name,
                                                               filetypes=[("Function Files", ".mcfunction")],
                                                               defaultextension=".mcfunction"):
-                    if os.path.exists(_save_path):
-                        os.remove(_save_path)
+                    if os.path.exists(_save_path): os.remove(_save_path)
                     shutil.copyfile("Cache/convertor/function.mcfunction", _save_path)
             else:
-                if _save_path := filedialog.askdirectory(title="MIDI-MCSTRUCTURE NEXT"):
-                    _save_path += "/" + _music_name
-                    _n = 0
-                    while True:
-                        if os.path.exists(_save_path + ("-" + str(_n) if _n else "")):
-                            _n += 1
-                        else:
-                            shutil.copytree("Cache/convertor/function_pack", _save_path + ("-" + str(_n) if _n else ""))
-                            break
+                if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
+                                                              filetypes=[("ZIP Files", ".zip")],
+                                                              initialfile=_music_name, defaultextension=".zip"):
+                    if os.path.exists(_save_path): os.remove(_save_path)
+                    shutil.make_archive(_save_path, "zip", "Cache/convertor/function_pack")
         elif _setting["output_format"] == 2:
             _last = _time_offset
             _buffer = []
@@ -529,14 +569,13 @@ def convertor(_setting, _task_id):
                             raise TypeError("Unknown Data Type: " + _note["type"])
                 _last = _k
 
-            with py7zr.SevenZipFile("Cache/mcpack/" + os.listdir("Cache/mcpack")[0], "r") as _io:
-                _io.extractall("Cache/convertor")
+            shutil.unpack_archive("Cache/mcpack/" + os.listdir("Cache/mcpack")[0], "Cache/convertor")
 
             with open("Cache/convertor/scripts/main.js", "r", encoding="utf-8") as _io:
                 _code = _io.read()
 
             with open("Cache/convertor/scripts/main.js", "w", encoding="utf-8") as _io:
-                _io.write(_code.replace("{SOUND_NAME}", _music_name, 1).replace("{SOUND_DATA}", json.dumps(_buffer), 1))
+                _io.write(_code.replace("{SOUND_NAME}", _music_name, 1).replace("{SOUND_DATA}", json.dumps(_buffer, indent=2), 1))
 
             with open("Cache/convertor/manifest.json", "rb") as _io:
                 _manifest_file = json.loads(_io.read())
@@ -548,15 +587,12 @@ def convertor(_setting, _task_id):
             with open("Cache/convertor/manifest.json", "w", encoding="utf-8") as _io:
                 _io.write(json.dumps(_manifest_file))
 
-            if _save_path := filedialog.askdirectory(title="MIDI-MCSTRUCTURE NEXT"):
-                _save_path += "/" + _music_name
-                _n = 0
-                while True:
-                    if os.path.exists(_save_path + ("-" + str(_n) if _n else "")):
-                        _n += 1
-                    else:
-                        shutil.copytree("Cache/convertor", _save_path + ("-" + str(_n) if _n else ""))
-                        break
+            if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
+                                                          filetypes=[("ZIP Files", ".zip")],
+                                                          initialfile=_music_name,
+                                                          defaultextension=".zip"):
+                if os.path.exists(_save_path): os.remove(_save_path)
+                shutil.make_archive(_save_path, "zip", "Cache/convertor")
     except:
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         logger.error(traceback.format_exc())
@@ -797,7 +833,7 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
         _text_surface.set_alpha(255 * global_info["message_info"][0])
 
         _text_position = ui_manager.get_abs_position((0.5, 1.044 - global_info["message_info"][0] * 0.089), True)
-        _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
+        _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - global_asset["font"].get_height() / 2))
 
         if global_info["message_info"][1] <= 3000:
             global_info["message_info"][0] += (1 - global_info["message_info"][0]) * global_info["animation_speed"]
@@ -850,9 +886,9 @@ def set_selector_num(_num: None | int = None) -> None:
             global_info["setting"]["max_selector_num"] = 2
             global_info["message"].append("单条指令内的时间项数至少为2个！")
 
-def show_download(_title: str, _url: str, _hash: str, _callback=lambda: remove_page(overlay_page)):
-    _state = {"state": 0, "downloaded": 0, "total": 0}
-    threading.Thread(target=download, args=(_url, _state, _hash), daemon=True).start()
+def show_download(_title: str, _url: str, _callback=lambda: remove_page(overlay_page), *, _hash: str, _target_path: str = "Cache/extracted"):
+    _state = {"state": 0, "object": None}
+    threading.Thread(target=download, args=(_url, _state, _hash, _target_path), daemon=True).start()
     add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "time": 0, "done": False, "callback": _callback}])
 
 def reboot_to_update():
@@ -864,10 +900,6 @@ def start_install_editor():
 
 def install_editor():
     try:
-        if os.path.exists("Editor"):
-            logger.warn("\"Editor\" Directory Will be Removed!")
-            shutil.rmtree("Editor")
-        shutil.move("Cache/extracted", "Editor")
         enter_to_editor()
     except:
         logger.error(traceback.format_exc())
@@ -893,7 +925,7 @@ def enter_to_editor(_path: str = ""):
             logger.error(traceback.format_exc())
 
             if global_info["editor_update"]["version"] > 0:
-                show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], global_info["editor_update"]["hash"], start_install_editor)
+                show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], start_install_editor, _hash=global_info["editor_update"]["hash"], _target_path="Editor")
             else:
                 global_info["message"].append("无法加载编辑器版本信息，请稍后重试！")
 
@@ -966,15 +998,17 @@ def get_version_list():
         _update_list = []
         for _i in _update_log:
             match _i["API"]:
-                case 0:
+                case 3:
                     _update_list.append(_i)
-                case 1:
+                case 4:
                     if _i["version"] > global_info["editor_update"]["version"]: global_info["editor_update"] = _i
-                case 2:
+                case 5:
                     global_info["mcpack_update"][0] = _i["hash"]
                     global_info["mcpack_update"][1] = _i["download_url"]
                 case _:
                     logger.info("Unknown API Version: " + str(_i["API"]))
+
+        if global_info["mcpack_update"][0]: update_mcpack()
 
         _update_list.sort(key=lambda _i: _i["version"], reverse=True)
 
@@ -988,80 +1022,46 @@ def get_version_list():
     except:
         logger.error(traceback.format_exc())
 
-def download(_url, _state, _target_hash="", _file_name="package.7z", _extract=True):
+def download(_url, _state, _target_hash="", _file_name="package.tar.zst", _target_path="Cache/extracted", _extract=True):
     try:
         _state["state"] = 0
 
-        _file_hash = ""
-        if os.path.exists("Cache/download/" + _file_name) and _target_hash:
-            with open("Cache/download/" + _file_name, "rb") as _io:
-                _file_hash = str(hashlib.file_digest(_io, "md5").hexdigest())
+        with NetStream(_url) as _net:
+            _state["object"] = _net
+            with tarfile.open(fileobj=_net, mode="r|zst") as _io:
+                _io.extractall(_target_path)
 
-        if _file_hash != _target_hash or not _target_hash:
-            if os.path.exists("Cache/download"):
-                logger.warn("Cache/download Will be Removed!")
-                shutil.rmtree("Cache/download")
-            os.makedirs("Cache/download")
-
-            _real_hash = hashlib.md5()
-
-            with open("Cache/download/" + _file_name, "ab") as _io:
-                with requests.get(_url, stream=True) as _response:
-                    _response.raise_for_status()
-
-                    _state["total"] = int(_response.headers["content-length"])
-                    for _data_chunk in _response.iter_content(chunk_size=4096):
-                        _state["downloaded"] += len(_data_chunk)
-                        _real_hash.update(_data_chunk)
-                        _io.write(_data_chunk)
-
-            if _target_hash and _target_hash != str(_real_hash.hexdigest()):
-                raise IOError("Broken Package, Please Try Again.")
+        if _target_hash and _target_hash != _net.get_md5():
+            raise IOError("Broken Package, Please Try Again.")
 
         _state["state"] = 1
-
-        if os.path.exists("Cache/extracted"):
-            logger.warn("Cache/extracted Will be Removed!")
-            shutil.rmtree("Cache/extracted")
-        os.makedirs("Cache/extracted")
-
-        logger.info("Extract " + _file_name)
-        with py7zr.SevenZipFile("Cache/download/" + _file_name, "r") as _io:
-            _io.extractall("Cache/extracted")
     except:
         logger.error(traceback.format_exc())
         _state["state"] = -1
-    finally:
-        if _state["state"] != -1: _state["state"] = 2
 
 def update_mcpack():
     try:
-        while True:
-            if global_info["mcpack_update"][0]:
-                if os.path.exists("Cache/mcpack/" + global_info["mcpack_update"][0] + ".7z"):
-                    logger.info("Behavior Package is the Lasest Version!")
-                else:
-                    logger.info("Try to update Behavior Package")
-                    if os.path.exists("Cache/mcpack"):
-                        shutil.rmtree("Cache/mcpack")
-                    os.makedirs("Cache/mcpack")
+        if os.path.exists("Cache/mcpack/" + global_info["mcpack_update"][0] + ".tar.zst"):
+            logger.info("Behavior Package is the Lasest Version!")
+        else:
+            logger.info("Try to update Behavior Package")
+            if os.path.exists("Cache/mcpack"):
+                shutil.rmtree("Cache/mcpack")
+            os.makedirs("Cache/mcpack")
 
-                    _real_hash = hashlib.md5()
-                    with open("Cache/mcpack/" + global_info["mcpack_update"][0] + ".7z", "ab") as _io:
-                        with requests.get(global_info["mcpack_update"][1], stream=True) as _response:
-                            _response.raise_for_status()
+            _real_hash = hashlib.md5()
+            with open("Cache/mcpack/" + global_info["mcpack_update"][0] + ".tar.zst", "ab") as _io:
+                with requests.get(global_info["mcpack_update"][1], stream=True) as _response:
+                    _response.raise_for_status()
 
-                            for _data_chunk in _response.iter_content(chunk_size=1024):
-                                _real_hash.update(_data_chunk)
-                                _io.write(_data_chunk)
+                    for _data_chunk in _response.iter_content(chunk_size=1024):
+                        _real_hash.update(_data_chunk)
+                        _io.write(_data_chunk)
 
-                    if global_info["mcpack_update"][0] != str(_real_hash.hexdigest()):
-                        raise IOError("Broken Package, Please Try Again.")
+            if global_info["mcpack_update"][0] != str(_real_hash.hexdigest()):
+                raise IOError("Broken Package, Please Try Again.")
 
-                    global_info["message"].append("行为包模板更新成功！")
-                break
-            else:
-                time.sleep(1)
+            global_info["message"].append("行为包模板更新成功！")
     except:
         logger.warn(traceback.format_exc())
         global_info["message"].append("MMS检测到行为包模板更新，但因某些原因无法更新")
@@ -1132,7 +1132,7 @@ def convertor_screen(_info, _input):
     if global_info["convertor"]["edition"] == 0:
         _ver_text = "基岩版"
         if global_info["convertor"]["output_format"] == 2:
-            _ver_text += "（测试版SAPI）"
+            pass
         elif global_info["convertor"]["version"] == 0:
             _ver_text += "（1.19.50以下）"
         elif global_info["convertor"]["version"] == 1:
@@ -1307,8 +1307,9 @@ def version_list_screen(_info, _input):
                 (0.7, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(len(_ver_list)), 0.035, 255), -1),
                 (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][1]), 1),
                 (0.025, 0.178, 0.95, 0.089, ("V" + str(_ver_list[_info["index"]]["version"]) + ("-" + str(_ver_list[_info["index"]]["edition"]) if _ver_list[_info["index"]]["edition"] else ""), 0.035, 255), -1),
-                (0.025, 0.311, 0.95, 0.089, ("查看版本详情", 0.035, _info["button_state"][2]), 2),
-                (0.025, 0.444, 0.95, 0.089, ("立即下载并安装", 0.035, _info["button_state"][3]), 3)
+                (0.025, 0.311, 0.95, 0.089, (_ver_list[_info["index"]]["tips"], 0.035, 255), -1),
+                (0.025, 0.444, 0.95, 0.089, ("查看版本详情", 0.035, _info["button_state"][2]), 2),
+                (0.025, 0.578, 0.95, 0.089, ("立即下载并安装", 0.035, _info["button_state"][3]), 3)
             ),
             pygame.mouse.get_pos()
         )
@@ -1330,8 +1331,8 @@ def version_list_screen(_info, _input):
                     show_download(
                         ("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]),
                         _ver_info["download_url"],
-                        _ver_info["hash"],
-                        reboot_to_update
+                        reboot_to_update,
+                        _hash=_ver_info["hash"]
                     )
                 case 4:
                     _info["index"] = 0
@@ -1344,7 +1345,7 @@ def version_list_screen(_info, _input):
         _root = ui_manager.get_blur_background()
         _text_surface = global_asset["font"].render("无法获取版本信息", True, (255, 255, 255))
         _text_position = ui_manager.get_abs_position((0.5, 0.5), True)
-        _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - _text_surface.get_size()[1] / 2))
+        _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - global_asset["font"].get_height() / 2))
 
     return _root
 
@@ -1384,13 +1385,12 @@ def download_screen(_info, _input):
         remove_page(overlay_page)
         _info["time"] = -1
 
-    if _info["state"]["state"] == 0:
-        _text = str(round_45((_info["state"]["downloaded"] / _info["state"]["total"]) * 100, 2)) + "%" if \
-        _info["state"]["total"] else "等待中"
+    if _info["state"]["object"] is None:
+        _text = "等待中"
+    elif _info["state"]["state"] == 0:
+        _text = str(round_45((_info["state"]["object"].tell() / _info["state"]["object"].size) * 100, 2)) + "%" if _info["state"]["object"].size else "等待中"
     elif _info["state"]["state"] == 1:
-        _text = "正在解压"
-    elif _info["state"]["state"] == 2:
-        _text = "解压完成"
+        _text = "下载完成"
         if not _info["done"]:
             _info["callback"]()
             _info["done"] = True
@@ -1536,21 +1536,18 @@ def setting_screen(_info, _input):
         match _id:
             case 0:
                 global_info["convertor"]["output_format"] += 1
-                if global_info["convertor"]["output_format"] > 2:
-                    global_info["convertor"]["output_format"] = 0
-
-                if global_info["convertor"]["output_format"] == 2:
-                    global_info["convertor"]["command_type"] = 0
-                    global_info["convertor"]["version"] = 1
-
                 if global_info["convertor"]["edition"] == 1:
                     global_info["convertor"]["output_format"] = 1
+                elif global_info["convertor"]["output_format"] > (2 if global_info["convertor"]["version"] == 1 else 1):
+                    global_info["convertor"]["output_format"] = 0
+
+                if global_info["convertor"]["output_format"] == 1:
                     if global_info["convertor"]["command_type"] == 0:
                         global_info["convertor"]["command_type"] = 1
-            case 1:
-                if global_info["convertor"]["output_format"] == 2:
+                elif global_info["convertor"]["output_format"] == 2:
                     global_info["convertor"]["command_type"] = 0
-                else:
+            case 1:
+                if global_info["convertor"]["output_format"] != 2:
                     global_info["convertor"]["command_type"] += 1
                     if global_info["convertor"]["command_type"] >= 3:
                         if global_info["convertor"]["output_format"] == 0:
@@ -1562,7 +1559,7 @@ def setting_screen(_info, _input):
                 if global_info["convertor"]["volume"] >= 110:
                     global_info["convertor"]["volume"] = 0
             case 3:
-                if global_info["convertor"]["output_format"] == 0:global_info["convertor"]["structure"] += 1
+                if global_info["convertor"]["output_format"] == 0: global_info["convertor"]["structure"] += 1
                 if global_info["convertor"]["structure"] >= len(global_asset["structure"]): global_info["convertor"]["structure"] = 0
         if global_info["convertor"]["command_type"] == 0: global_info["convertor"]["compression"] = False
 
@@ -1634,7 +1631,7 @@ def game_edition_screen(_info, _input):
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, ("游戏版本 " + ["基岩版", "Java版"][global_info["convertor"]["edition"]], 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("指令语法 " + ["1.19.50/1.13以下", "1.19.50/1.13以上"][global_info["convertor"]["version"]], 0.035, _info["button_state"][1]) if global_info["convertor"]["output_format"] != 2 else ("测试版SAPI", 0.035, 255), 1)
+            (0.025, 0.177, 0.95, 0.089, ("指令语法 " + ["1.19.50/1.13以下", "1.19.50/1.13以上"][global_info["convertor"]["version"]], 0.035, _info["button_state"][1]), 1)
         ),
         pygame.mouse.get_pos()
     )
@@ -1652,10 +1649,13 @@ def game_edition_screen(_info, _input):
                 else:
                     global_info["convertor"]["edition"] = 0
             case 1:
-                if global_info["convertor"]["version"] == 0 or global_info["convertor"]["output_format"] == 2:
+                if global_info["convertor"]["version"] == 0:
                     global_info["convertor"]["version"] = 1
                 else:
                     global_info["convertor"]["version"] = 0
+                    if global_info["convertor"]["output_format"] == 2:
+                        global_info["convertor"]["output_format"] = 0
+
         if global_info["convertor"]["version"] == 0 and global_info["convertor"]["edition"] == 1:
             global_info["convertor"]["compression"] = False
 

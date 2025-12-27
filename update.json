@@ -1,4 +1,4 @@
- [
+[
   {
     "API": 1,
     "hash": "8688065cf63c5357c74058ad0e0763de",
@@ -7,8 +7,19 @@
   },
   {
     "API": 2,
-    "hash": "7b2f6353ac51d04f275d90b49cd37b44",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/Extension.7z"
+    "hash": "7acffa66925cf2f4ec812062dd723570",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/Player_Extension.7z"
+  },
+  {
+    "API": 4,
+    "hash": "5abaa04fdd6b1e29ae495e31790a109b",
+    "version": 10251226,
+    "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V10251226-Release/ProfileEditor.tar.zst"
+  },
+  {
+    "API": 5,
+    "hash": "444c2b803fd18a8be670fba052806cbc",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/Player_Extension.tar.zst"
   },
   {
     "API": 0,
@@ -225,5 +236,14 @@
     "edition": "Alpha",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/MIDI-MCSTRUCTURE_NEXT_V17251222-Alpha.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251222-Alpha"
+  },
+  {
+    "API": 3,
+    "tips": "向下降级需要先安装该版本！",
+    "hash": "e0bea03db3e83399c112322009ef4baa",
+    "version": 17251222,
+    "edition": "Alpha",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/MIDI-MCSTRUCTURE_NEXT_V17251222-Alpha.tar.zst",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251222-Alpha"
   }
- ]
+]
