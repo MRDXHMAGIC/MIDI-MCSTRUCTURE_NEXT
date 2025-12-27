@@ -23,7 +23,6 @@ from midi_reader import MIDIReader
 class NetStream:
     def __init__(self, _url: str):
         self.size = 0
-        self.__md5 = hashlib.md5()
         self.__buffer = b""
         self.__stream = None
         self.__position = 0
@@ -43,8 +42,6 @@ class NetStream:
         return False
     def readable(self):
         return self.__stream is not None
-    def get_md5(self):
-        return str(self.__md5.hexdigest())
     def tell(self):
         return self.__position
     def read(self, _size: int = -1):
@@ -62,7 +59,6 @@ class NetStream:
             _data, self.__buffer = self.__buffer[:_size], self.__buffer[_size:]
 
         self.__position += len(_data)
-        self.__md5.update(_data)
 
         return _data
 
@@ -167,8 +163,7 @@ def asset_load() -> None:
 
         remove_page(overlay_page)
         global_info["message_info"][2] = True
-        show_download("test", "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/MIDI-MCSTRUCTURE_NEXT_V17251222-Alpha.tar.zst", _hash="61233ae31818e2d038694e18e9cf55c9")
-        # add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0]}], 0, False)
+        add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0]}], 0, False)
     except:
         global_info["exit"] = 3
         logger.error(traceback.format_exc())
@@ -886,9 +881,9 @@ def set_selector_num(_num: None | int = None) -> None:
             global_info["setting"]["max_selector_num"] = 2
             global_info["message"].append("单条指令内的时间项数至少为2个！")
 
-def show_download(_title: str, _url: str, _callback=lambda: remove_page(overlay_page), *, _hash: str, _target_path: str = "Cache/extracted"):
+def show_download(_title: str, _url: str, _target_path, _callback=lambda: remove_page(overlay_page)):
     _state = {"state": 0, "object": None}
-    threading.Thread(target=download, args=(_url, _state, _hash, _target_path), daemon=True).start()
+    threading.Thread(target=download, args=(_url, _state, _target_path), daemon=True).start()
     add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "time": 0, "done": False, "callback": _callback}])
 
 def reboot_to_update():
@@ -925,7 +920,12 @@ def enter_to_editor(_path: str = ""):
             logger.error(traceback.format_exc())
 
             if global_info["editor_update"]["version"] > 0:
-                show_download("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], start_install_editor, _hash=global_info["editor_update"]["hash"], _target_path="Editor")
+                show_download(
+                    "ProfileEditor V" + str(global_info["editor_update"]["version"]),
+                    global_info["editor_update"]["download_url"],
+                    "Editor",
+                    start_install_editor
+                )
             else:
                 global_info["message"].append("无法加载编辑器版本信息，请稍后重试！")
 
@@ -1022,7 +1022,7 @@ def get_version_list():
     except:
         logger.error(traceback.format_exc())
 
-def download(_url, _state, _target_hash="", _file_name="package.tar.zst", _target_path="Cache/extracted", _extract=True):
+def download(_url, _state, _target_path, _extract=True):
     try:
         _state["state"] = 0
 
@@ -1030,9 +1030,6 @@ def download(_url, _state, _target_hash="", _file_name="package.tar.zst", _targe
             _state["object"] = _net
             with tarfile.open(fileobj=_net, mode="r|zst") as _io:
                 _io.extractall(_target_path)
-
-        if _target_hash and _target_hash != _net.get_md5():
-            raise IOError("Broken Package, Please Try Again.")
 
         _state["state"] = 1
     except:
@@ -1331,8 +1328,9 @@ def version_list_screen(_info, _input):
                     show_download(
                         ("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]),
                         _ver_info["download_url"],
-                        reboot_to_update,
-                        _hash=_ver_info["hash"]
+                        "Cache/extracted",
+                        reboot_to_update
+
                     )
                 case 4:
                     _info["index"] = 0

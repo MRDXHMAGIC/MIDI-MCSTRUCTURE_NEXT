@@ -12,7 +12,6 @@
   },
   {
     "API": 4,
-    "hash": "5abaa04fdd6b1e29ae495e31790a109b",
     "version": 10251226,
     "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V10251226-Release/ProfileEditor.tar.zst"
   },
@@ -239,11 +238,26 @@
   },
   {
     "API": 3,
-    "tips": "向下降级需要先安装该版本！",
-    "hash": "e0bea03db3e83399c112322009ef4baa",
+    "tips": "\u5411\u4e0b\u964d\u7ea7\u9700\u8981\u5148\u5b89\u88c5\u8be5\u7248\u672c\uff01",
     "version": 17251222,
     "edition": "Alpha",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/MIDI-MCSTRUCTURE_NEXT_V17251222-Alpha.tar.zst",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251222-Alpha"
+  },
+  {
+    "API": 0,
+    "hash": "57e477e78308b9b62068e9ed1c1fc502",
+    "version": 17251228,
+    "edition": "Beta",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251228-Beta/MIDI-MCSTRUCTURE_NEXT_V17251228-Beta.7z",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251228-Beta"
+  },
+  {
+    "API": 3,
+    "tips": "\u4f18\u5316MIDI\u884c\u4e3a\u5305\u751f\u6210\u529f\u80fd",
+    "version": 17251228,
+    "edition": "Beta",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251228-Beta/MIDI-MCSTRUCTURE_NEXT_V17251228-Beta.tar.zst",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251228-Beta"
   }
 ]

@@ -5,6 +5,8 @@ import shutil
 import hashlib
 import tarfile
 import subprocess
+from compression.zstd import CompressionParameter
+
 
 VERSION = int(input("Version: "))
 EDITION = input("Edition: ")
@@ -25,7 +27,7 @@ with open("dist/Asset/text/setting.json", "rb") as io:
 setting["version"] = int(TITLE[1:9])
 setting["edition"] = EDITION
 setting["disable_update_check"] = False
-with open("dist/Asset/text/setting.json", "w") as io:
+with open("dist/Asset/text/setting.json", "w", encoding="utf-8") as io:
     io.write(json.dumps(setting, indent=2))
 
 subprocess.Popen(".venv/Scripts/pyinstaller.exe -D -w -i ././icon.ico ././main.py -y -n \"MIDI-MCSTRUCTURE_NEXT\"").wait()
@@ -37,41 +39,42 @@ shutil.move("dist/Updater", "dist/MIDI-MCSTRUCTURE_NEXT/Updater")
 
 shutil.make_archive(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}", "zip", "dist/MIDI-MCSTRUCTURE_NEXT")
 
-with tarfile.open(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}.tar.zst", "w:zst", level=22) as io:
+with open(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}.zip", "rb") as io:
+    print("ZIP File MD5: " + str(hashlib.file_digest(io, "md5").hexdigest()))
+
+options = {
+    CompressionParameter.compression_level: CompressionParameter.compression_level.bounds()[1],
+    CompressionParameter.checksum_flag: True
+}
+
+with tarfile.open(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}.tar.zst", "w:zst", options=options) as io:
     io.add("dist/MIDI-MCSTRUCTURE_NEXT", "")
 
 edition_info = {
     "API": 3,
     "tips": "",
-    "hash": "",
     "version": setting["version"],
     "edition": setting["edition"],
-    "download_url": f"https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/MIDI-MCSTRUCTURE_NEXT_{TITLE}.tar.zst",
+    "download_url": f"https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/{TITLE}/MIDI-MCSTRUCTURE_NEXT_{TITLE}.tar.zst",
     "description_url": f"https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/{TITLE}"
 }
 
 with open("update.json", "rb") as io:
     update_log = json.loads(io.read())
 
-with open(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}.tar.zst", "rb") as io:
-    edition_info["hash"] = str(hashlib.file_digest(io, "md5").hexdigest())
-
 edition_info["tips"] = input("Tips: ")
 print()
 
-for n, i in update_log:
-    if update_log[i]["API"] != edition_info["API"]:
+for n in range(len(update_log)):
+    if update_log[n]["API"] != edition_info["API"]:
         pass
-    elif update_log[i]["version"] != setting["version"]:
+    elif update_log[n]["version"] != setting["version"]:
         pass
-    elif update_log[i]["edition"] == setting["edition"]:
-        update_log[i] = edition_info
+    elif update_log[n]["edition"] == setting["edition"]:
+        update_log[n] = edition_info
         break
 else:
     update_log.append(edition_info)
 
-with open("update.json", "w") as io:
+with open("update.json", "w", encoding="utf-8") as io:
     io.write(json.dumps(update_log, indent=2))
-
-with open(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}.zip", "rb") as io:
-    print("ZIP File MD5: " + str(hashlib.file_digest(io, "md5").hexdigest()))
