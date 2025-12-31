@@ -1,6 +1,5 @@
 import os
 import log
-import math
 import json
 import time
 import pickle
@@ -94,20 +93,22 @@ def asset_load() -> None:
         else:
             global_asset["menu"] = pygame.image.load("Asset/image/default_menu_background.png").convert_alpha()
 
+        _blur = False
         if os.path.exists("Cache/image/blur.png"):
             global_asset["blur"] = pygame.image.load("Cache/image/blur.png").convert_alpha()
-            _progress = None
         else:
             global_asset["blur"] = pygame.Surface(global_asset["menu"].get_size()).convert_alpha()
-            _progress = [0, global_asset["menu"].get_size()[0]]
+            _blur = True
 
-        change_size((800, 450), False, _progress)
-        if _progress is not None:
-            global_asset["blur"] = blur_picture(global_asset["menu"], _progress)
-            if not os.path.exists("Cache/image"):
-                os.makedirs("Cache/image")
+        change_size((800, 450), False)
+
+        if _blur:
+            global_asset["blur"] = pygame.transform.gaussian_blur(global_asset["menu"], 5).convert_alpha()
+
+            if not os.path.exists("Cache/image"): os.makedirs("Cache/image")
             pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
-        ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
+
+            ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
 
         logger.debug("Pygame Modules Initializing...")
         pygame.init()
@@ -168,7 +169,7 @@ def asset_load() -> None:
         global_info["exit"] = 3
         logger.error(traceback.format_exc())
 
-def change_size(_size: tuple[int], _exit: bool, _progress: list | None = None) -> tuple[list[int] | None, pygame.Surface]:
+def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygame.Surface]:
     try:
         # 添加资源
         ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
@@ -181,7 +182,7 @@ def change_size(_size: tuple[int], _exit: bool, _progress: list | None = None) -
         # 加载启动遮罩背景
         global_asset["loading_mask"] = pygame.transform.smoothscale(global_asset["res_load_mask"], ui_manager.get_abs_position((1, 1))).convert_alpha()
         # 添加启动页面
-        add_page(overlay_page, [loading_screen, {"progress": _progress, "alpha": 0}], 1)
+        add_page(overlay_page, [loading_screen, {"progress": None, "alpha": 0}], 1)
         # 加载字体
         global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", ui_manager.get_abs_position((0, 0.062))[1])
         # 加载消息背景
@@ -193,39 +194,6 @@ def change_size(_size: tuple[int], _exit: bool, _progress: list | None = None) -
     except:
         logger.fatal(traceback.format_exc())
         global_info["exit"] = 3
-
-def blur_picture(_surf: pygame.Surface, _progress: list[int], _kernel_size: int=33, _sigma: float=2) -> pygame.Surface:
-    _kernel = []
-    _radius = _kernel_size // 2
-
-    _max_kernel_var = 0
-    for _x in range(_radius * -1, _radius + 1):
-        _buffer = []
-        for _y in range(_radius * -1, _radius + 1):
-            _value = 1 / (2 * math.pi * _sigma ** 2) * math.exp(-(_x ** 2 + _y ** 2) / (2 * _sigma ** 2))
-            _buffer.append(_value)
-            if _max_kernel_var < _value: _max_kernel_var = _value
-        _kernel.append(_buffer)
-
-    _mask_size = (_radius * 2 + 1, _radius * 2 + 1)
-    _blur_mask = pygame.Surface(_mask_size).convert_alpha()
-    for _x in range(_mask_size[0]):
-        for _y in range(_mask_size[1]):
-            _blur_mask.set_at((_x, _y), (255, 255, 255, round_45(255 * (1 / _max_kernel_var) * _kernel[_x][_y])))
-
-    _surf_size = _surf.get_size()
-    _mask = pygame.Surface(_mask_size).convert_alpha()
-    _result = pygame.Surface(_surf_size).convert_alpha()
-
-    _mask.set_alpha(255 * _max_kernel_var)
-    for _x in range(_surf_size[0]):
-        _progress[0] = _x + 1
-        for _y in range(_surf_size[1]):
-            _mask.fill(_surf.get_at((_x, _y)))
-            _mask.blit(_blur_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-            _result.blit(_mask, (_x - _radius, _y - _radius))
-
-    return _result
 
 def load_profile(*, _path: str = "Asset/text/profile.json", _backup_path: str = "Asset/text/default_profile.json") -> bool:
     _result = False
