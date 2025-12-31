@@ -37,11 +37,6 @@ shutil.move("dist/Writer", "dist/MIDI-MCSTRUCTURE_NEXT/Writer")
 subprocess.Popen(".venv/Scripts/pyinstaller.exe -D -w -i ././icon.ico ././updater.py -y -n \"Updater\"").wait()
 shutil.move("dist/Updater", "dist/MIDI-MCSTRUCTURE_NEXT/Updater")
 
-shutil.make_archive(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}", "zip", "dist/MIDI-MCSTRUCTURE_NEXT")
-
-with open(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}.zip", "rb") as io:
-    print("ZIP File MD5: " + str(hashlib.file_digest(io, "md5").hexdigest()))
-
 options = {
     CompressionParameter.compression_level: CompressionParameter.compression_level.bounds()[1],
     CompressionParameter.checksum_flag: True

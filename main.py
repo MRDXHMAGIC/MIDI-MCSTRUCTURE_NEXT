@@ -61,6 +61,7 @@ class NetStream:
 
         return _data
 
+
 # 加载资源函数
 def asset_load() -> None:
     try:
@@ -160,7 +161,7 @@ def asset_load() -> None:
             global_info["message"].append("无法加载配置文件，已加载默认配置文件！")
 
         logger.debug("Initialized Successfully!")
-        time.sleep(1)
+        time.sleep(0.5)
 
         remove_page(overlay_page)
         global_info["message_info"][2] = True
@@ -260,7 +261,7 @@ def convertor(_setting, _task_id):
 
         _instruments = _midi_reader.scan_instruments()
 
-        _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0, "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": [False]}
+        _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0, "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": [False]}
         add_page(overlay_page, [adj_mapping_screen, _info])
 
         while not _info["done"][0]:
@@ -823,6 +824,7 @@ def watchdog():
         os._exit(1)
 
 def change_button_alpha(_state: list[float], _index: int) -> None:
+    if pygame.mouse.get_pressed(3)[0]: _index = -1
     for _n in range(len(_state)):
         if _n == _index:
             _state[_n] += (255 - _state[_n]) * global_info["animation_speed"]
@@ -946,6 +948,17 @@ def start_task(_id: None | int = None) -> None:
         _argument = global_info["convertor"].copy()
         _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
         threading.Thread(target=convertor, args=(_argument, _id), daemon=True).start()
+
+def exit_mapping_screen(_info) -> None:
+    _info[0] = 1
+
+def get_resource_size(_url: str, _info: dict) -> None:
+    try:
+        with requests.head(_url, allow_redirects=True) as _response:
+            _response.raise_for_status()
+            _info[3] = str(round_45(int(_response.headers["content-length"]) / 1048576, 2))
+    except:
+        logger.error(traceback.format_exc())
 
 # GUI页面管理函数
 def add_page(_overlay, _page, _position=0, _back=True):
@@ -1235,7 +1248,7 @@ def software_setting_screen(_info, _input):
     if "mouse_left" in _input and not _input["mouse_left"]:
         match _id:
             case 0:
-                add_page(overlay_page, [version_list_screen, {"tag_index": 0, "index": 0, "edition_info": global_info["update_list"], "button_state": [0, 0, 0, 0, 0]}])
+                add_page(overlay_page, [version_list_screen, {"size": ["你是否要下载并安装", "该版本", "？\n该软件包大小为", "--", "MB"], "tag_index": 0, "index": 0, "edition_info": global_info["update_list"], "button_state": [0, 0, 0, 0, 0]}])
             case 1:
                 set_selector_num()
             case 2:
@@ -1274,9 +1287,8 @@ def version_list_screen(_info, _input):
                 (0.7, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(len(_ver_list)), 0.035, 255), -1),
                 (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][1]), 1),
                 (0.025, 0.178, 0.95, 0.089, ("V" + str(_ver_list[_info["index"]]["version"]) + ("-" + str(_ver_list[_info["index"]]["edition"]) if _ver_list[_info["index"]]["edition"] else ""), 0.035, 255), -1),
-                (0.025, 0.311, 0.95, 0.089, (_ver_list[_info["index"]]["tips"], 0.035, 255), -1),
-                (0.025, 0.444, 0.95, 0.089, ("查看版本详情", 0.035, _info["button_state"][2]), 2),
-                (0.025, 0.578, 0.95, 0.089, ("立即下载并安装", 0.035, _info["button_state"][3]), 3)
+                (0.025, 0.311, 0.95, 0.089, ("查看版本详情", 0.035, _info["button_state"][2]), 2),
+                (0.025, 0.444, 0.95, 0.089, ("下载并安装", 0.035, _info["button_state"][3]), 3)
             ),
             pygame.mouse.get_pos()
         )
@@ -1292,16 +1304,13 @@ def version_list_screen(_info, _input):
                     if _info["index"] >= len(_ver_list):
                         _info["index"] = 0
                 case 2:
-                    if _ver_list[_info["index"]]["description_url"]: webbrowser.open(_ver_list[_info["index"]]["description_url"])
+                    if _ver_list[_info["index"]]["description_url"]: add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["在浏览器中查看", "好的"], "argument": [_ver_list[_info["index"]]["description_url"]], "callback": lambda _url: webbrowser.open(_url), "content": _ver_list[_info["index"]]["tips"]}], 0, True)
                 case 3:
                     _ver_info = _ver_list[_info["index"]]
-                    show_download(
-                        ("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]),
-                        _ver_info["download_url"],
-                        "Cache/extracted",
-                        reboot_to_update
-
-                    )
+                    _info["size"][3] = "--"
+                    _info["size"][1] = " V" + str(_ver_info["version"]) + "-" + str(_ver_info["edition"])
+                    threading.Thread(target=get_resource_size, args=(_ver_info["download_url"], _info["size"])).start()
+                    add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": (("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]), _ver_info["download_url"], "Cache/extracted", reboot_to_update), "callback": show_download, "content": _info["size"]}], 0, True)
                 case 4:
                     _info["index"] = 0
                     _info["tag_index"] += 1
@@ -1378,6 +1387,13 @@ def download_screen(_info, _input):
     return _root
 
 def adj_mapping_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["是", "否"], "argument": [_info["done"]], "callback": exit_mapping_screen, "content": "你是否要离开？"}], 0, True)
+
+    if _info["done"][0] == 1:
+        remove_page(overlay_page)
+        _info["done"][0] = 2
+
     _config_length = len(_info["data"][_info["channels"][_info["channel_index"]]])
     _page_num = round_01(_config_length / 6)
 
@@ -1400,17 +1416,16 @@ def adj_mapping_screen(_info, _input):
         _config_list.extend(
             (
                 (0.025, _i, 0.25, 0.089, (get_time_text(_data[0][0]) + " - " + get_time_text(_data[0][1]), 0.035, 255), -1),
-                (0.3, _i, 0.675, 0.089, (_text, 0.035, _info["button_state"][_n + 4]), _n + 4)
+                (0.3, _i, 0.675, 0.089, (_text, 0.035, _info["button_state"][_n + 3]), _n + 3)
             )
         )
 
     _root, _id = ui_manager.apply_ui(
         (
-            (0.025, 0.044, 0.075, 0.089, ("OK", 0.035, _info["button_state"][0]), 0),
-            (0.125, 0.044, 0.475, 0.089, ("通道 " + str(_info["channels"][_info["channel_index"]] + 1), 0.035, _info["button_state"][1]), 1),
-            (0.625, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.044, 0.575, 0.089, ("通道 " + str(_info["channels"][_info["channel_index"]] + 1), 0.035, _info["button_state"][0]), 0),
+            (0.625, 0.044, 0.05, 0.089, ("◀", 0.035, _info["button_state"][1]), 1),
             (0.7, 0.044, 0.2, 0.089, (str(_info["index"] + 1) + "/" + str(_page_num) if _config_length else "无数据", 0.035, 255), -1),
-            (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][3]), 3)
+            (0.925, 0.044, 0.05, 0.089, ("▶", 0.035, _info["button_state"][2]), 2)
         ) + tuple(_config_list),
         pygame.mouse.get_pos()
     )
@@ -1418,24 +1433,21 @@ def adj_mapping_screen(_info, _input):
     if "mouse_left" in _input and not _input["mouse_left"]:
         match _id:
             case 0:
-                remove_page(overlay_page)
-                _info["done"][0] = True
-            case 1:
                 _info["channel_index"] += 1
                 if _info["channel_index"] >= len(_info["channels"]):
                     _info["channel_index"] = 0
                 _info["index"] = 0
-            case 2:
+            case 1:
                 _info["index"] -= 1
                 if _info["index"] < 0:
                     _info["index"] = _page_num - 1
-            case 3:
+            case 2:
                 _info["index"] += 1
                 if _info["index"] >= _page_num:
                     _info["index"] = 0
-            case _n if 4 <= _n <= 9:
+            case _n if 3 <= _n <= 8:
                 if _info["channels"][_info["channel_index"]] not in _info["mapping"]: _info["mapping"][_info["channels"][_info["channel_index"]]] = {}
-                add_page(overlay_page, [packing_screen, {"done": _info["done"], "button_state": [0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "percussion": _info["channels"][_info["channel_index"]] == 9, "mapping": _info["mapping"][_info["channels"][_info["channel_index"]]], "origin": _info["data"][_info["channels"][_info["channel_index"]]][_info["index"] * 6 + _id - 4][1]}])
+                add_page(overlay_page, [packing_screen, {"done": _info["done"], "button_state": [0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "percussion": _info["channels"][_info["channel_index"]] == 9, "mapping": _info["mapping"][_info["channels"][_info["channel_index"]]], "origin": _info["data"][_info["channels"][_info["channel_index"]]][_info["index"] * 6 + _id - 3][1]}])
 
     change_button_alpha(_info["button_state"], _id)
 
@@ -1675,6 +1687,28 @@ def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
 
 def processing_screen(_info, _input):
     return ui_manager.get_blur_background()
+
+def asking_screen(_info, _input):
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.778, ("".join(_info["content"]), 0.035, 255), -1),
+            (0.025, 0.867, 0.463, 0.089, (_info["button_text"][0], 0.035, _info["button_state"][0]), 0),
+            (0.513, 0.867, 0.463, 0.089, (_info["button_text"][1], 0.035, _info["button_state"][1]), 1)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                remove_page(overlay_page)
+                _info["callback"](*_info["argument"])
+            case 1:
+                remove_page(overlay_page)
+
+    change_button_alpha(_info["button_state"], _id)
+
+    return _root
 
 global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "", "animation_speed": 10, "max_selector_num": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
