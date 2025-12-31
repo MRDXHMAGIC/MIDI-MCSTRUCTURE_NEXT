@@ -32,10 +32,10 @@ class NetStream:
 
         self.size = int(self.__response.headers["content-length"])
     def __enter__(self):
-        self.__stream = self.__response.__enter__().iter_content(4096)
+        self.__stream = self.__response.__enter__().iter_content(5120)
         return self
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__response.__exit__(exc_type, exc_val, exc_tb)
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
+        self.__response.__exit__(_exc_type, _exc_val, _exc_tb)
     def __bool__(self):
         return True
     def seekable(self):
@@ -445,9 +445,10 @@ def convertor(_setting, _task_id):
             _time_offset = 0
 
         # 根据需要将音符数据转为各种文件
-        if os.path.exists("Cache/convertor"):
-            shutil.rmtree("Cache/convertor")
+        if os.path.exists("Cache/convertor"):shutil.rmtree("Cache/convertor")
         os.makedirs("Cache/convertor")
+        if os.path.exists("Cache/output"):shutil.rmtree("Cache/output")
+        os.makedirs("Cache/output")
 
         _music_name = os.path.splitext(os.path.basename(_setting["file"]))[0]
 
@@ -466,11 +467,11 @@ def convertor(_setting, _task_id):
                     "-s Asset/mcstructure/" + global_asset["structure"][_setting["structure"]],
                     "-c Cache/convertor/raw_command.txt",
                     "-id " + ("0" if _task_id is None else str(_task_id)),
-                    "Cache/convertor/structure.mcstructure"
+                    "Cache/output/structure.mcstructure"
                 )
             )).wait()
 
-            if not os.path.exists("Cache/convertor/structure.mcstructure"):
+            if not os.path.exists("Cache/output/structure.mcstructure"):
                 raise IOError("structure.mcstructure Not in Cache!")
 
             if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
@@ -478,17 +479,16 @@ def convertor(_setting, _task_id):
                                                           filetypes=[("Structure Files", ".mcstructure")],
                                                           defaultextension=".mcstructure"):
                 if os.path.exists(_save_path): os.remove(_save_path)
-                shutil.copyfile("Cache/convertor/structure.mcstructure", _save_path)
+                shutil.copyfile("Cache/output/structure.mcstructure", _save_path)
         elif _setting["output_format"] == 1:
-            if _setting["command_type"] == 0:
-                raise ValueError("Unsupported Command Type!")
+            if _setting["command_type"] == 0: raise ValueError("Unsupported Command Type!")
 
             with open("Cache/convertor/function.mcfunction", "w", encoding="utf-8") as _io:
                 for _cmd in cmd_convertor(_setting, _profile, _result, _task_id, _time_offset, False):
                     _io.write(_cmd + "\n")
 
             if _setting["edition"] == 0:
-                os.makedirs("Cache/convertor/function_pack/functions")
+                if not os.path.exists("Cache/output/functions") :os.makedirs("Cache/output/functions")
 
                 with open("Asset/text/manifest.json", "rb") as _io:
                     _manifest_file = json.loads(_io.read())
@@ -507,30 +507,30 @@ def convertor(_setting, _task_id):
 
                 shutil.copyfile(
                     "Cache/convertor/function.mcfunction",
-                    "Cache/convertor/function_pack/functions/midi_player.mcfunction"
+                    "Cache/output/functions/midi_player.mcfunction"
                 )
 
-                with open("Cache/convertor/function_pack/manifest.json", "w", encoding="utf-8") as _io:
+                with open("Cache/output/manifest.json", "w", encoding="utf-8") as _io:
                     _io.write(json.dumps(_manifest_file))
 
-                with open("Cache/convertor/function_pack/world_behavior_packs.json", "w", encoding="utf-8") as _io:
+                with open("Cache/output/world_behavior_packs.json", "w", encoding="utf-8") as _io:
                     _io.write(json.dumps(_behavior_file))
 
                 shutil.copyfile(
                     "Asset/image/icon.png",
-                    "Cache/convertor/function_pack/pack_icon.png"
+                    "Cache/output/pack_icon.png"
                 )
             elif _setting["edition"] == 1:
-                os.makedirs("Cache/convertor/function_pack/data/mms/functions")
+                os.makedirs("Cache/output/data/mms/functions")
 
                 _behavior_file = {"pack": {"pack_format": 1, "description": "§r§fBy §dMIDI-MCSTRUCTURE §bNEXT"}}
 
                 shutil.copyfile(
                     "Cache/convertor/function.mcfunction",
-                    "Cache/convertor/function_pack/data/mms/functions/midi_player.mcfunction"
+                    "Cache/output/data/mms/functions/midi_player.mcfunction"
                 )
 
-                with open("Cache/convertor/function_pack/pack.mcmeta", "w", encoding="utf-8") as _io:
+                with open("Cache/output/pack.mcmeta", "w", encoding="utf-8") as _io:
                     _io.write(json.dumps(_behavior_file))
 
             if _setting["version"] == 0 and _setting["edition"] == 1:
@@ -539,14 +539,14 @@ def convertor(_setting, _task_id):
                                                               filetypes=[("Function Files", ".mcfunction")],
                                                               defaultextension=".mcfunction"):
                     if os.path.exists(_save_path): os.remove(_save_path)
-                    shutil.copyfile("Cache/convertor/convertor/function.mcfunction", _save_path)
+                    shutil.copyfile("Cache/convertor/function.mcfunction", _save_path)
             else:
                 if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
                                                               filetypes=[("ZIP Files", ".zip")],
                                                               initialfile=_music_name,
                                                               defaultextension=".zip"):
                     if os.path.exists(_save_path): os.remove(_save_path)
-                    shutil.make_archive(os.path.splitext(_save_path)[0], "zip", "Cache/convertor/function_pack")
+                    shutil.make_archive(os.path.splitext(_save_path)[0], "zip", "Cache/output")
         elif _setting["output_format"] == 2:
             _last = _time_offset
             _buffer = []
@@ -583,13 +583,13 @@ def convertor(_setting, _task_id):
             with open("Cache/convertor/manifest.json", "w", encoding="utf-8") as _io:
                 _io.write(json.dumps(_manifest_file))
 
-            shutil.make_archive("Cache/convertor/package", "zip", "Cache/convertor")
+            shutil.make_archive("Cache/output/package", "zip", "Cache/convertor")
             if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
                                                           filetypes=[("MCPACK Files", ".mcpack")],
                                                           initialfile=_music_name,
                                                           defaultextension=".mcpack"):
                 if os.path.exists(_save_path): os.remove(_save_path)
-                shutil.copyfile("Cache/convertor/package.zip", _save_path)
+                shutil.copyfile("Cache/output/package.zip", _save_path)
     except:
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         logger.error(traceback.format_exc())
