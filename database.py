@@ -121,7 +121,10 @@ class LyricsList:
                 # 处理剩余的一句歌词
                 if _lyrics_text_buffer: self.lyrics_list.append(_lyrics_text_buffer)
         else:
-            self.lyrics_list = list(_lyrics_list[_i] for _i in _time_list)
+            self.lyrics_list = tuple(_lyrics_list[_i] for _i in _time_list)
+
+        # 移除空行
+        self.lyrics_list = tuple(filter(lambda _i: bool(_i), self.lyrics_list))
 
         # 生成时间点信息
         _node_list = []

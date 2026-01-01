@@ -104,7 +104,7 @@ def asset_load() -> None:
         change_size((800, 450), False)
 
         if _blur:
-            global_asset["blur"] = pygame.transform.gaussian_blur(global_asset["menu"], 5).convert_alpha()
+            global_asset["blur"] = pygame.transform.gaussian_blur(global_asset["menu"], 3).convert_alpha()
 
             if not os.path.exists("Cache/image"): os.makedirs("Cache/image")
             pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
@@ -527,9 +527,9 @@ def convertor(_setting, _task_id):
                         _delay = 0
                     match _note:
                         case {"type": "note", "program": _sound, "pitch": _pitch, "velocity": _volume, "panning": (_x, _y)}:
-                            _buffer.append([_delay, "n", _sound, _pitch, _volume, _x, _y])
+                            _buffer.append(json.dumps([_delay, "n", _sound, _pitch, _volume, _x, _y]))
                         case {"type": "lyrics", "last": _last, "real_f": _rf, "real_s": _rs, "next": _next}:
-                            _buffer.append([_delay, "l", _last, _rf, _rs, _next])
+                            _buffer.append(json.dumps([_delay, "l", _last, _rf, _rs, _next]))
                         case _:
                             raise TypeError("Unknown Data Type: " + _note["type"])
                 _last = _k
@@ -540,7 +540,7 @@ def convertor(_setting, _task_id):
                 _code = _io.read()
 
             with open("Cache/convertor/scripts/main.js", "w", encoding="utf-8") as _io:
-                _io.write(_code.replace("{SOUND_NAME}", _music_name, 1).replace("{SOUND_DATA}", json.dumps(_buffer, indent=2), 1))
+                _io.write(_code.replace("{SOUND_NAME}", _music_name, 1).replace("{SOUND_DATA}", f"[\n  {",\n  ".join(_buffer)}\n]", 1))
 
             with open("Cache/convertor/manifest.json", "rb") as _io:
                 _manifest_file = json.loads(_io.read())
@@ -835,9 +835,15 @@ def reduce_background(_path: str = "") -> None:
     try:
         if not _path: _path = filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")])
         if _path:
-            pygame.image.save(pygame.transform.smoothscale(pygame.image.load(_path), (800, 450)), "Asset/image/custom_menu_background.png")
-            shutil.rmtree("Cache/image")
-            global_info["message"].append("已成功设置背景，重启软件生效！")
+            global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load(_path), (800, 450)).convert_alpha()
+            global_asset["blur"] = pygame.transform.gaussian_blur(global_asset["menu"], 3)
+
+            if not os.path.exists("Cache/image"): os.makedirs("Cache/image")
+            pygame.image.save(global_asset["menu"], "Asset/image/custom_menu_background.png")
+            pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
+
+            ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
+            global_info["message"].append("已成功设置背景！")
     except:
         logger.error(traceback.format_exc())
         global_info["message"].append("无法加载图片文件！")
@@ -885,23 +891,21 @@ def enter_to_editor(_path: str = ""):
                 raise Exception("New Edition Version is Available")
 
             subprocess.Popen("Editor/ProfileEditor.exe").wait()
-        except:
+        except Exception as _exc:
             _remove = False
             remove_page(overlay_page)
 
             logger.error(traceback.format_exc())
 
             if global_info["editor_update"]["version"] > 0:
-                show_download(
-                    "ProfileEditor V" + str(global_info["editor_update"]["version"]),
-                    global_info["editor_update"]["download_url"],
-                    "Editor",
-                    start_install_editor
-                )
+
+                _text = ["你需要MMS配置文件编辑器 V", str(global_info["editor_update"]["version"]), "，是否安装？\n软件包大小为", "--", "MB"]
+                threading.Thread(target=get_resource_size, args=(global_info["editor_update"]["download_url"], _text)).start()
+                add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": ("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], "Editor", start_install_editor), "callback": show_download, "content": _text}], 0, True)
             else:
                 global_info["message"].append("无法加载编辑器版本信息，请稍后重试！")
 
-            raise
+            raise _exc
 
         if load_profile():
             global_info["message"].append("已重新加载配置文件！")
@@ -989,7 +993,7 @@ def get_version_list():
                     global_info["mcpack_update"][0] = _i["hash"]
                     global_info["mcpack_update"][1] = _i["download_url"]
                 case _:
-                    logger.info("Unknown API Version: " + str(_i["API"]))
+                    logger.debug("Unknown API Version: " + str(_i["API"]))
 
         if global_info["mcpack_update"][0]: update_mcpack()
 
@@ -1025,8 +1029,7 @@ def update_mcpack():
             logger.info("Behavior Package is the Lasest Version!")
         else:
             logger.info("Try to update Behavior Package")
-            if os.path.exists("Cache/mcpack"):
-                shutil.rmtree("Cache/mcpack")
+            if os.path.exists("Cache/mcpack"): shutil.rmtree("Cache/mcpack")
             os.makedirs("Cache/mcpack")
 
             _real_hash = hashlib.md5()
@@ -1362,7 +1365,9 @@ def download_screen(_info, _input):
         remove_page(overlay_page)
         _info["time"] = -1
 
-    if _info["state"]["object"] is None:
+    if _info["state"]["state"] == -1:
+        _text = "下载失败，请重试"
+    elif _info["state"]["object"] is None:
         _text = "等待中"
     elif _info["state"]["state"] == 0:
         _text = str(round_45((_info["state"]["object"].tell() / _info["state"]["object"].size) * 100, 2)) + "%" if _info["state"]["object"].size else "等待中"
@@ -1371,8 +1376,6 @@ def download_screen(_info, _input):
         if not _info["done"]:
             _info["callback"]()
             _info["done"] = True
-    elif _info["state"]["state"] == -1:
-        _text = "下载失败，请重试"
     else:
         _text = ""
 
