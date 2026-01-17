@@ -2,8 +2,8 @@
   "id": 1,
   "fps": 60,
   "log_level": 5,
-  "version": 17260102,
-  "edition": "Release",
+  "version": 17260117,
+  "edition": "Patch",
   "animation_speed": 10,
   "max_selector_num": 8,
   "disable_update_check": true
