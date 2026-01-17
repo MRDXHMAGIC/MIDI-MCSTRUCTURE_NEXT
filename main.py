@@ -356,7 +356,7 @@ def convertor(_setting, _task_id):
         _result = {}
 
         # 调整平均音量，音符数据取整，最终合并到结果中
-        if _average_volume[0]:
+        if _average_volume[0] and _average_volume[1]:
             _average_volume = (_setting["volume"] / 100) / (_average_volume[1] / _average_volume[0])
         else:
             _average_volume = 1
@@ -932,7 +932,11 @@ def set_time_per_tick(_time: None | int = None) -> None:
         global_info["message"].append("请输入每游戏刻的时间！")
         add_page(overlay_page, [keyboard_screen, {"value": global_info["convertor"]["time_per_tick"], "text": "ms/tick", "callback": set_time_per_tick, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
     else:
-        global_info["convertor"]["time_per_tick"] = _time
+        if _time >= 1:
+            global_info["convertor"]["time_per_tick"] = _time
+        else:
+            _time = 1
+            global_info["message"].append("每游戏刻的时间至少要大于0！")
 
 def start_task(_id: None | int = None) -> None:
     if not global_info["convertor"]["file"]:

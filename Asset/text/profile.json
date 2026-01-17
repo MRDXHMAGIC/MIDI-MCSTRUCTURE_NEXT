@@ -260,7 +260,7 @@
         "/execute @a ~~~ playsound {SOUND} @s ~~~ {VOLUME} {PITCH} {VOLUME}"
       ],
       "clock": [
-        "/execute @a[scores={{TTS}}] ~~~ run playsound {SOUND} @s ~~~ {VOLUME} {PITCH} {VOLUME}",
+        "/execute @a[scores={{TTS}}] ~~~ playsound {SOUND} @s ~~~ {VOLUME} {PITCH} {VOLUME}",
         "/scoreboard players set @a[scores={MMS_Service={TIME}..}] MMS_Service -1",
         "/scoreboard players add @a[scores={MMS_Service=0..}] MMS_Service 1"
       ],
