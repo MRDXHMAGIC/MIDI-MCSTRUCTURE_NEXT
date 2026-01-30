@@ -253,6 +253,14 @@
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251228-Beta"
   },
   {
+    "API": 0,
+    "hash": "e61c2b794b22bf1d2fa653a4cb691e9e",
+    "version": 17260117,
+    "edition": "Patch",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17260117-Patch/MIDI-MCSTRUCTURE_NEXT_V17260117-Patch.7z",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17260117-Patch"
+  },
+  {
     "API": 3,
     "tips": "\u4f18\u5316MIDI\u884c\u4e3a\u5305\u751f\u6210\u529f\u80fd",
     "version": 17251228,
