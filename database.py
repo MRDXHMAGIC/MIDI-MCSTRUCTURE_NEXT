@@ -1,5 +1,119 @@
-import mido
-from tools import round_45
+from tools import limit, round_45
+
+class Note:
+    __slots__ = (
+        "__program",
+        "__pitch",
+        "__volume",
+        "__panning"
+    )
+
+    master_volume = 1
+    def __init__(self, _program: str, _volume: float, _pitch: float, _panning: tuple[float]):
+        if not isinstance(_panning, (tuple, list)): raise TypeError("Panning must be tuple!")
+        if not isinstance(_program, str): raise TypeError("Program must be string!")
+        if not isinstance(_volume, (float, int)): raise TypeError("Volume must be float!")
+        if not isinstance(_pitch, (float, int)): raise TypeError("Pitch must be float!")
+
+        self.__program = _program
+
+        self.__pitch = round_45(_pitch, 2)
+        self.__volume = round_45(_volume, 2)
+        self.__panning = (round_45(_panning[0], 2), round_45(_panning[1], 2))
+
+    def dump(self, _origin: bool = True) -> dict[str, float | tuple[float]]:
+        return {
+            "type": "note",
+            "pitch": self.__pitch,
+            "program": self.__program,
+            "panning": self.__panning,
+            "volume": round_45(self.__volume * (1 if _origin else self.master_volume), 2)
+        }
+
+    def java_available(self) -> bool:
+        return 0.5 <= self.__pitch <= 2.0
+
+    def format(self, _text: str) -> str:
+        if not isinstance(_text, str): raise TypeError("Text must be string!")
+        
+        return _text.replace(
+            "{SOUND}", self.__program).replace(
+            "{PANNING}", "^" + str(self.__panning[0]) + " ^ ^" + str(self.__panning[1])).replace(
+            "{VOLUME}", str(round_45(limit(0, self.__volume * self.master_volume, 1), 2))).replace(
+            "{PITCH}", str(self.__pitch)
+        )
+
+    def __eq__(self, _other: Note) -> bool:
+        return isinstance(_other, Note) and hash(_other) == hash(self)
+
+    def __hash__(self) -> int:
+        return hash(
+            (
+                self.__pitch,
+                self.__volume,
+                self.__program,
+                self.__panning
+            )
+        )
+
+    def __str__(self) -> str:
+        return f"Note   <pg={self.__program}, pt={self.__pitch}, vl={round_45(self.__volume * self.master_volume, 2)}, pn={self.__panning[0]}-{self.__panning[1]}>"
+
+class Lyrics:
+    __slots__ = (
+        "__last",
+        "__head",
+        "__tail",
+        "__next"
+    )
+    def __init__(self, _last: str, _head: str, _tail: str, _next: str) -> None:
+        if not isinstance(_last, str): raise TypeError("Lyrics must be string!")
+        if not isinstance(_head, str): raise TypeError("Lyrics must be string!")
+        if not isinstance(_tail, str): raise TypeError("Lyrics must be string!")
+        if not isinstance(_next, str): raise TypeError("Lyrics must be string!")
+
+        self.__last = _last
+        self.__head = _head
+        self.__tail = _tail
+        self.__next = _next
+
+    def format(self, _text: str) -> str:
+        if not isinstance(_text, str): raise TypeError("Text must be string!")
+
+        return _text.replace(
+            "{LAST}", self.__last).replace(
+            "{REAL_F}", self.__head).replace(
+            "{REAL_S}", self.__tail).replace(
+            "{NEXT}", self.__next
+        )
+
+    def java_available(self) -> bool:
+        return True
+
+    def dump(self, _) -> dict[str, str]:
+        return {
+            "type": "lyrics",
+            "last": self.__last,
+            "real_f": self.__head,
+            "real_s": self.__tail,
+            "next": self.__next
+        }
+
+    def __eq__(self, _other: Lyrics) -> bool:
+        return isinstance(_other, Lyrics) and hash(_other) == hash(self)
+
+    def __hash__(self) -> int:
+        return hash(
+            (
+                self.__last,
+                self.__head,
+                self.__tail,
+                self.__next
+            )
+        )
+
+    def __str__(self) -> str:
+        return f"Lyrics <{self.__last} | {self.__head} {self.__tail} | {self.__next}>"
 
 class InfoList:
     def __init__(self, _init_value) -> None:
@@ -25,45 +139,6 @@ class InfoList:
                 return self.list_info[_i]
 
         raise ValueError("Couldn't find a Matched Value!")
-
-class TempoList:
-    def __init__(self, _ticks_per_beat: int) -> None:
-        self.ticks_per_beat = _ticks_per_beat
-        self.tempo_list = [[0, 500000]]
-        self.is_revised = False
-
-    def add_tempo(self, _time: int | float | str, _tempo: int) -> None:
-        if not isinstance(_time, (int, float, str)):
-            raise ValueError("Time Must be int, float or str!")
-        if not isinstance(_tempo, int):
-            raise ValueError("Tempo Must be int!")
-        for _i in self.tempo_list:
-            if _i[0] == _time:
-                _i[1] = _tempo
-                break
-        else:
-            self.tempo_list.append([_time, _tempo])
-        self.is_revised = True
-
-    def compute_tick_time(self, _time: int | float | str) -> float:
-        if not isinstance(_time, (int, float, str)):
-            raise ValueError("Time Must be int, float or str!")
-
-        if self.is_revised:
-            self.tempo_list.sort(key=lambda _i: _i[0])
-            self.is_revised = False
-
-        _tempo_list = self.tempo_list + [(float("INF"), self.tempo_list[-1][1])]
-
-        _abs_time = 0
-        for _n in range(1, len(_tempo_list)):
-            if _tempo_list[_n][0] <= _time:
-                _abs_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], self.ticks_per_beat, _tempo_list[_n - 1][1]) * 1000
-            else:
-                _abs_time += mido.tick2second(_time - _tempo_list[_n - 1][0], self.ticks_per_beat, _tempo_list[_n - 1][1]) * 1000
-                break
-
-        return _abs_time
 
 class LyricsList:
     def __init__(self, _lyrics_list: dict[int, str], _smooth: bool=True, _join: bool=False):
@@ -145,7 +220,7 @@ class LyricsList:
                 _node_list.append((_k, _num))
         self.node_list = _node_list
 
-    def __iter__(self):
+    def __iter__(self) -> tuple[Lyrics]:
         # 渲染歌词
         _lyrics_list_length = len(self.lyrics_list)
         for _k, _i in self.node_list:
@@ -153,6 +228,6 @@ class LyricsList:
             for _n in range(_lyrics_list_length):
                 _text_length = len(self.lyrics_list[_n])
                 if _lyrics_position + _text_length >= _i:
-                    yield _k, (self.lyrics_list[_n - 1] if _n > 0 else "", (self.lyrics_list[_n][:_i - _lyrics_position], self.lyrics_list[_n][_i - _lyrics_position:]), self.lyrics_list[_n + 1] if _n < _lyrics_list_length - 1 else "")
+                    yield _k, Lyrics(self.lyrics_list[_n - 1] if _n > 0 else "", self.lyrics_list[_n][:_i - _lyrics_position], self.lyrics_list[_n][_i - _lyrics_position:], self.lyrics_list[_n + 1] if _n < _lyrics_list_length - 1 else "")
                     break
                 _lyrics_position += _text_length

@@ -1,29 +1,86 @@
 import math
 import mido
-from tools import round_45
-from database import InfoList, TempoList
+from tools import round_int, round_45
+from database import InfoList
+
+class TempoList:
+    def __init__(self, _ticks_per_beat: int) -> None:
+        self.ticks_per_beat = _ticks_per_beat
+        self.tempo_list = [[0, 500000]]
+        self.is_revised = False
+
+    def add_tempo(self, _time: int | float | str, _tempo: int) -> None:
+        if not isinstance(_time, (int, float, str)):
+            raise ValueError("Time Must be int, float or str!")
+        if not isinstance(_tempo, int):
+            raise ValueError("Tempo Must be int!")
+        for _i in self.tempo_list:
+            if _i[0] == _time:
+                _i[1] = _tempo
+                break
+        else:
+            self.tempo_list.append([_time, _tempo])
+        self.is_revised = True
+
+    def compute_tick_time(self, _time: int | float | str) -> float:
+        if not isinstance(_time, (int, float, str)):
+            raise ValueError("Time Must be int, float or str!")
+
+        if self.is_revised:
+            self.tempo_list.sort(key=lambda _i: _i[0])
+            self.is_revised = False
+
+        _tempo_list = self.tempo_list + [(float("INF"), self.tempo_list[-1][1])]
+
+        _abs_time = 0
+        for _n in range(1, len(_tempo_list)):
+            if _tempo_list[_n][0] <= _time:
+                _abs_time += mido.tick2second(_tempo_list[_n][0] - _tempo_list[_n - 1][0], self.ticks_per_beat, _tempo_list[_n - 1][1]) * 1000
+            else:
+                _abs_time += mido.tick2second(_time - _tempo_list[_n - 1][0], self.ticks_per_beat, _tempo_list[_n - 1][1]) * 1000
+                break
+
+        return _abs_time
 
 class MIDIReader:
     def __init__(self, _path: str):
-        self.midi_file = None
+        self.__midi_file = None
+        self.__nodes_cache = []
         self.__instruments_mapping = {}
         # 尝试使用UTF-8编码解码MIDI文件
         for _charset in ("utf-8", "latin1"):
             try:
                 # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
-                self.midi_file = mido.MidiFile(_path, charset=_charset, clip=True)
+                self.__midi_file = mido.MidiFile(_path, charset=_charset, clip=True)
                 break
             except:
                 pass
         else:
             raise IOError("Can't Load MIDI File!")
 
+    def __scan_time_nodes(self):
+        _tempo_info = TempoList(self.__midi_file.ticks_per_beat)
+        # 遍历每个轨道
+        for _track in self.__midi_file.tracks:
+            # 设置轨道初始时间
+            _time = 0
+            # 遍历每个音符
+            for _message in _track:
+                # 累加时间，将时间差表示转为时间轴表示
+                _time += _message.time
+                # 获取tempo信息
+                if _message.type == "set_tempo":
+                    _tempo_info.add_tempo(_time, _message.tempo)
+                # 获取音符时间信息
+                elif _message.type == "note_on":
+                    yield _tempo_info.compute_tick_time(_message.time)
+
     def scan_instruments(self):
         _channel_info = {}
         _program_info = {}
-        _tempo_info = TempoList(self.midi_file.ticks_per_beat)
+        _tempo_info = TempoList(self.__midi_file.ticks_per_beat)
         # 遍历每个轨道
-        for _track in self.midi_file.tracks:
+        for _track in self.__midi_file.tracks:
             # 设置轨道初始时间
             _time = 0
             # 遍历每个音符
@@ -72,14 +129,17 @@ class MIDIReader:
 
         return _program_info
 
+    def get_time_accuracy(self, _time_per_tick: float) -> float:
+        return sum(map(lambda _i: (round_int(_i / _time_per_tick) - _i / _time_per_tick) ** 2, self.__scan_time_nodes()))
+
     def override_mapping(self, _mapping: dict[int, dict[int, int]]) -> None:
         self.__instruments_mapping = _mapping
 
     def __iter__(self):
         _channel_info = {}
-        _tempo_info = TempoList(self.midi_file.ticks_per_beat)
+        _tempo_info = TempoList(self.__midi_file.ticks_per_beat)
         # 遍历每个轨道
-        for _track in self.midi_file.tracks:
+        for _track in self.__midi_file.tracks:
             # 设置轨道初始时间
             _time = 0
             # 遍历每个音符

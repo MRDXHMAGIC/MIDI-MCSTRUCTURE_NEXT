@@ -22,17 +22,14 @@ def uuid(_n: int) -> str:
         _n -= 1
     return _uuid
 
-def round_45(_i: float, _n: int = 0) -> float:
-    _i = int(_i * 10 ** int(_n + 1))
-    if _i % 10 >= 5:
-        _i += 10
-    _i = int(_i / 10)
-    return _i / (10 ** int(_n))
+def limit(_min: float, _real: float, _max: float) -> float:
+    return max(_min, min(_max, _real))
 
-def round_01(_i: float, _n: int = 3) -> int:
-    if _i % 1 >= 10 ** -_n:
-        _i += 1
-    return int(_i)
+def round_int(_i: float) -> int:
+    return int(_i + (0.5 if _i >= 0 else -0.5))
+
+def round_45(_i: float, _n: int = 0) -> float:
+    return int(_i * (10 ** _n) + (0.5 if _i >= 0 else -0.5)) / (10 ** _n)
 
 def is_number(_str: str) -> bool:
     _length = len(_str)
