@@ -4,7 +4,7 @@
 ![MMS LOGO](Asset/image/logo.png)
 
 #### 介绍
-MIDI音乐转为mcstructure或mcfunction。
+MIDI音乐转为mcstructure、mcfunction或SAPI行为包。
 
 ### 特性
 1. 支持新旧Java版和基岩版游戏，对各个版本做了语法和音效的适配

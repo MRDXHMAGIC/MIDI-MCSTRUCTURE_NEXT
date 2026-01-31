@@ -1,75 +1,91 @@
-import log
-import argparse
-import traceback
+import io
 import amulet_nbt
+from zlib import crc32
 from tools import get_list_position, check_position
 
-logger = log.Logger()
+class Position:
+    def __init__(self, _position: tuple[int] = (0, 0, 0)) -> None:
+        self.__x = _position[0]
+        self.__y = _position[1]
+        self.__z = _position[2]
 
-try:
-    args_parser = argparse.ArgumentParser(
-        prog="writer",
-        description="Write Minecraft Command into .mcstructure.",
-        epilog="Belong to MIDI-MCSTRUCTURE NEXT Project."
-    )
+        self.max_size = [0, 0, 0]
 
-    args_parser.add_argument("output", type=str)
-    args_parser.add_argument("-id", "--structure_id", default=0, type=int)
-    args_parser.add_argument("-s", "--structure", required=True, type=str)
-    args_parser.add_argument("-l", "--log_level", default=5, type=int)
-    args_parser.add_argument("-c", "--command", required=True, type=str)
+    @property
+    def x(self) -> int:
+        return self.__x
 
-    args = args_parser.parse_args()
+    @x.setter
+    def x(self, _value: int):
+        self.__x = _value
+        self.max_size[0] = max(self.max_size[0], _value)
 
-    logger.set_log_level(args.log_level)
+    @property
+    def y(self) -> int:
+        return self.__y
 
-    with open(args.command, "r", encoding="utf-8") as io:
-        commands = io.read()
+    @y.setter
+    def y(self, _value: int):
+        self.__y = _value
+        self.max_size[1] = max(self.max_size[1], _value)
 
-    delay = 0
-    music_name = ""
-    command_list = []
-    length_of_time = 0
-    for command in commands.splitlines():
-        if command.startswith("# "):
-            command = command[2:].split("=", 1)
-            if len(command) == 2:
-                if command[0] == "tick_delay":
-                    delay = int(command[1])
-                elif command[0] == "music_name":
-                    music_name = command[1]
-                elif command[0] == "length_of_time":
-                    length_of_time = int(command[1])
-        else:
-            command_list.append((command, delay))
+    @property
+    def z(self) -> int:
+        return self.__z
 
-    structure = amulet_nbt.load(args.structure, little_endian=True, compressed=False).compound
+    @z.setter
+    def z(self, _value: int):
+        self.__z = _value
+        self.max_size[2] = max(self.max_size[2], _value)
 
-    size = (structure["size"][0].py_int, structure["size"][1].py_int, structure["size"][2].py_int)
+    def list_pos(self, _size: tuple[int]) -> int:
+        return get_list_position(_size, self)
 
-    logger.info("Structure Size: " + str(size[0]) + "*" + str(size[1]) + "*" + str(size[2]))
+def change_pos(_position: Position, _direction: int) -> Position:
+    if _direction == 0:
+        _position.y -= 1
+    elif _direction == 1:
+        _position.y += 1
+    elif _direction == 2:
+        _position.z -= 1
+    elif _direction == 3:
+        _position.z += 1
+    elif _direction == 4:
+        _position.x -= 1
+    elif _direction == 5:
+        _position.x += 1
 
-    position = [0, 0, 0]
-    for n in structure["structure"]["palette"]["default"]["block_position_data"]:
-        i = structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]
-        if i["CustomName"].py_str == "start":
-            position = [i["x"].py_int - structure["structure_world_origin"][0].py_int,
-                        i["y"].py_int - structure["structure_world_origin"][1].py_int,
-                        i["z"].py_int - structure["structure_world_origin"][2].py_int]
+def write_cmd(_task) -> io.FileIO:
+    _structure = amulet_nbt.load(_task["structure"], little_endian=True, compressed=False).compound
 
-            logger.debug("Set Position: " + str(position[0]) + " " + str(position[1]) + " " + str(position[2]))
-        elif i["CustomName"].py_str == "append":
-            i["Command"] = amulet_nbt.StringTag(i["Command"].py_str.replace("__ADDRESS__", str(args.structure_id)).replace("__TOTAL__", str(length_of_time)).replace("__NAME__", music_name))
-        i["CustomName"] = amulet_nbt.StringTag("")
+    _size = (_structure["size"][0].py_int, _structure["size"][1].py_int, _structure["size"][2].py_int)
 
-    n = 0
-    for n, i in enumerate(structure["structure"]["palette"]["default"]["block_palette"]):
-        if i["name"].py_str == "minecraft:air":
-            air_palette = n
+    _position = Position()
+    for _n in _structure["structure"]["palette"]["default"]["block_position_data"].keys():
+        _i = _structure["structure"]["palette"]["default"]["block_position_data"][_n]["block_entity_data"]
+        if _i["CustomName"].py_str == "start":
+            _position = Position((
+                _i["x"].py_int - _structure["structure_world_origin"][0].py_int,
+                _i["y"].py_int - _structure["structure_world_origin"][1].py_int,
+                _i["z"].py_int - _structure["structure_world_origin"][2].py_int
+            ))
+
+        elif _i["CustomName"].py_str == "append":
+            _cmd = _i["Command"].py_str
+            for _k, _v in _task["map"]:
+                _cmd = _cmd.replace(_k, _v)
+            _i["Command"] = amulet_nbt.StringTag(_cmd)
+
+        _i["CustomName"] = amulet_nbt.StringTag("")
+
+    _n = 0
+    for _n, _i in enumerate(_structure["structure"]["palette"]["default"]["block_palette"]):
+        if _i["name"].py_str == "minecraft:air":
+            _air_palette = _n
             break
     else:
-        air_palette = n + 1
-        structure["structure"]["palette"]["default"]["block_palette"].append(
+        _air_palette = _n + 1
+        _structure["structure"]["palette"]["default"]["block_palette"].append(
             amulet_nbt.CompoundTag({
                 "name": amulet_nbt.StringTag("minecraft:air"),
                 "states": amulet_nbt.CompoundTag(),
@@ -78,51 +94,27 @@ try:
             })
         )
 
-    for command, delay in command_list:
-        n = str(get_list_position(size, position))
-        if n in structure["structure"]["palette"]["default"]["block_position_data"] and check_position(size, position):
-            structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["Command"] = amulet_nbt.StringTag(command)
-            structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["TickDelay"] = amulet_nbt.IntTag(delay)
-            direction = structure["structure"]["palette"]["default"]["block_palette"][structure["structure"]["block_indices"][0][get_list_position(size, position)].py_int]["states"]["facing_direction"].py_int
-            if direction == 0:
-                position[1] -= 1
-            elif direction == 1:
-                position[1] += 1
-            elif direction == 2:
-                position[2] -= 1
-            elif direction == 3:
-                position[2] += 1
-            elif direction == 4:
-                position[0] -= 1
-            elif direction == 5:
-                position[0] += 1
+    for _delay, _command in _task["cmd_list"]:
+        if not check_position(_size, _position): break
+
+        if _block_data := _structure["structure"]["palette"]["default"]["block_position_data"].get(str(_position.list_pos(_size))):
+            _block_data["block_entity_data"]["Command"] = amulet_nbt.StringTag(_command)
+            _block_data["block_entity_data"]["TickDelay"] = amulet_nbt.IntTag(_delay)
+            change_pos(_position, _structure["structure"]["palette"]["default"]["block_palette"][_structure["structure"]["block_indices"][0][_position.list_pos(_size)].py_int]["states"]["facing_direction"].py_int)
         else:
             break
 
-    while True:
-        n = str(get_list_position(size, position))
-        direction = structure["structure"]["palette"]["default"]["block_palette"][structure["structure"]["block_indices"][0][get_list_position(size, position)].py_int]["states"]["facing_direction"].py_int
-        if direction == 0:
-            position[1] -= 1
-        elif direction == 1:
-            position[1] += 1
-        elif direction == 2:
-            position[2] -= 1
-        elif direction == 3:
-            position[2] += 1
-        elif direction == 4:
-            position[0] -= 1
-        elif direction == 5:
-            position[0] += 1
-        if structure["structure"]["palette"]["default"]["block_position_data"][n]["block_entity_data"]["Command"].py_str == "":
-            del structure["structure"]["palette"]["default"]["block_position_data"][n]
-            structure["structure"]["block_indices"][0][int(n)] = amulet_nbt.IntTag(air_palette)
-            structure["structure"]["block_indices"][1][int(n)] = amulet_nbt.IntTag(-1)
-        if not check_position(size, position):
-            break
+    while check_position(_size, _position):
+        _n = _position.list_pos(_size)
 
-    amulet_nbt.TAG_Compound(structure).save_to(args.output, little_endian=True, compressed=False)
-except:
-    logger.fatal(traceback.format_exc())
-finally:
-    logger.done()
+        change_pos(_position, _structure["structure"]["palette"]["default"]["block_palette"][_structure["structure"]["block_indices"][0][_position.list_pos(_size)].py_int]["states"]["facing_direction"].py_int)
+
+        if _structure["structure"]["palette"]["default"]["block_position_data"][str(_n)]["block_entity_data"]["Command"].py_str == "":
+            del _structure["structure"]["palette"]["default"]["block_position_data"][str(_n)]
+            _structure["structure"]["block_indices"][0][_n] = amulet_nbt.IntTag(_air_palette)
+            _structure["structure"]["block_indices"][1][_n] = amulet_nbt.IntTag(-1)
+
+    _buffer = _structure.to_nbt(little_endian=True, compressed=False)
+
+
+    return hex(crc32(_buffer) & 0xFFFFFFFF)[2:].upper(), _buffer

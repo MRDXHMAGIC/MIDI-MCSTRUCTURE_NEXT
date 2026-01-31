@@ -15,6 +15,7 @@ import subprocess
 import webbrowser
 from math import ceil
 from tools import round_int, round_45, uuid, is_number, get_time_text
+from writer import write_cmd
 from tkinter import filedialog
 from database import LyricsList, Note, Lyrics
 from ui_manager import UIManager
@@ -65,9 +66,23 @@ class NetStream:
 
 
 # 加载资源函数
+base_path = os.path.abspath(getattr(sys, "_MEIPASS", "."))
+
+def path(*_args) -> str:
+    return os.path.join(base_path, *_args)
+
 def asset_load() -> None:
     try:
         logger.debug("Loading Setting Files...")
+
+        if not os.path.exists("Asset/text"): os.makedirs("Asset/text")
+
+        if os.path.exists(path("Asset/text/setting.json")) and not os.path.exists("Asset/text/setting.json"):
+            shutil.copyfile(path("Asset/text/setting.json"), "Asset/text/setting.json")
+
+        if os.path.exists(path("Asset/text/profile.json")) and not os.path.exists("Asset/text/profile.json"):
+            shutil.copyfile(path("Asset/text/profile.json"), "Asset/text/profile.json")
+
         if os.path.exists("Asset/text/setting.json"):
             with open("Asset/text/setting.json", "rb") as _io:
                 _buffer = json.loads(_io.read())
@@ -90,14 +105,14 @@ def asset_load() -> None:
         pygame.font.init()
 
         logger.debug("UI Renderer Initializing...")
-        global_asset["res_logo"] = pygame.image.load("Asset/image/logo.png").convert_alpha()
-        global_asset["res_error"] = pygame.image.load("Asset/image/error_background.png").convert_alpha()
-        global_asset["res_message"] = pygame.image.load("Asset/image/mask.png").convert_alpha()
-        global_asset["res_load_mask"] = pygame.image.load("Asset/image/loading_mask.png").convert_alpha()
+        global_asset["res_logo"] = pygame.image.load(path("Asset/image/logo.png")).convert_alpha()
+        global_asset["res_error"] = pygame.image.load(path("Asset/image/error_background.png")).convert_alpha()
+        global_asset["res_message"] = pygame.image.load(path("Asset/image/mask.png")).convert_alpha()
+        global_asset["res_load_mask"] = pygame.image.load(path("Asset/image/loading_mask.png")).convert_alpha()
         if os.path.exists("Asset/image/custom_menu_background.png"):
             global_asset["menu"] = pygame.image.load("Asset/image/custom_menu_background.png").convert_alpha()
         else:
-            global_asset["menu"] = pygame.image.load("Asset/image/default_menu_background.png").convert_alpha()
+            global_asset["menu"] = pygame.image.load(path("Asset/image/default_menu_background.png")).convert_alpha()
 
         _blur = False
         if os.path.exists("Cache/image/blur.png"):
@@ -114,13 +129,13 @@ def asset_load() -> None:
             if not os.path.exists("Cache/image"): os.makedirs("Cache/image")
             pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
 
-            ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
+            ui_manager.add_resource(_font_path=path("Asset/font/font.ttf"), _corner_surf=pygame.image.load(path("Asset/image/corner_mask.png")), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
 
         logger.debug("Pygame Modules Initializing...")
         pygame.init()
 
         logger.debug("Loading Mapping Files...")
-        with open("Asset/text/mapping.json", "rb") as _io:
+        with open(path("Asset/text/mapping.json"), "rb") as _io:
             global_asset["mapping"] = json.loads(_io.read())
 
         logger.debug("Producing Mapping...")
@@ -134,23 +149,13 @@ def asset_load() -> None:
             logger.info("Copy Backup Profile")
             shutil.copy("Asset/text/profile.json", "Asset/text/default_profile.json")
 
-        if os.path.isdir("Cache/extracted/Updater"):
-            logger.info("Replacing Updater Files...")
-            _n = 0
-            while _n <= 16:
-                try:
-                    if os.path.isdir("Updater"):
-                        shutil.rmtree("Updater")
-                    break
-                except:
-                    logger.error(traceback.format_exc())
-                    _n += 1
-            shutil.copytree("Cache/extracted/Updater", "Updater")
-            shutil.rmtree("Cache/extracted")
+        if os.path.isdir("Update"):
+            logger.info("Removing Update Files...")
+            shutil.rmtree("Update")
 
         logger.debug("Scanning .mcstructure Files...")
         global_asset["structure"] = []
-        for _n in os.listdir("Asset/mcstructure"):
+        for _n in os.listdir(path("Asset/mcstructure")):
             if os.path.splitext(_n)[1] == ".mcstructure":
                 if "推荐" in _n:
                     global_asset["structure"].insert(0, _n)
@@ -185,7 +190,7 @@ def asset_load() -> None:
 def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygame.Surface]:
     try:
         # 添加资源
-        ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
+        ui_manager.add_resource(_font_path=path("Asset/font/font.ttf"), _corner_surf=pygame.image.load(path("Asset/image/corner_mask.png")), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
         # 设置尺寸
         ui_manager.change_size(_size)
         # 加载错误界面
@@ -197,7 +202,7 @@ def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygam
         # 添加启动页面
         add_page(overlay_page, [loading_screen, {"progress": None, "alpha": 0}], 1)
         # 加载字体
-        global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", ui_manager.get_abs_position((0, 0.062))[1])
+        global_asset["font"] = pygame.font.Font(path("Asset/font/font.ttf"), ui_manager.get_abs_position((0, 0.062))[1])
         # 加载消息背景
         global_asset["message_mask"] = pygame.transform.scale(global_asset["res_message"], ui_manager.get_abs_position((1, 0.089))).convert_alpha()
         # 移除页面
@@ -371,33 +376,25 @@ def convertor(_setting, _task_id):
         _music_name = os.path.splitext(os.path.basename(_setting["file"]))[0]
 
         if _setting["output_format"] == 0:
-            with open("Cache/convertor/raw_command.txt", "w", encoding="utf-8") as _io:
-                _io.write("# music_name=" + _music_name + "\n")
-                _io.write("# length_of_time=" + str(max(list(_result))) + "\n")
-
-                for _time, _cmd in cmd_convertor(_setting, _profile, _time_offset, _result):
-                    _io.write(f"# tick_delay={_time}\n{_cmd.replace("{ADDRESS}", "0" if _task_id is None else str(_task_id))}\n")
-
-            subprocess.Popen(" ".join(
-                (
-                    "Writer/writer.exe",
-                    "-l " + str(global_info["setting"]["log_level"]),
-                    "-s Asset/mcstructure/" + global_asset["structure"][_setting["structure"]],
-                    "-c Cache/convertor/raw_command.txt",
-                    "-id " + ("0" if _task_id is None else str(_task_id)),
-                    "Cache/output/structure.mcstructure"
-                )
-            )).wait()
-
-            if not os.path.exists("Cache/output/structure.mcstructure"):
-                raise IOError("structure.mcstructure Not in Cache!")
+            _crc, _buffer = write_cmd(
+                {
+                    "structure": path("Asset/mcstructure/" + global_asset["structure"][_setting["structure"]]),
+                    "cmd_list": cmd_convertor(_setting, _profile, _time_offset, _result),
+                    "map": (
+                        ("__ADDRESS__", "0" if _task_id is None else str(_task_id)),
+                        ("__TOTAL__", str(max(_result.keys()))),
+                        ("__NAME__", _music_name)
+                    )
+                }
+            )
 
             if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
-                                                          initialfile=_music_name + "-" + uuid(6).upper(),
+                                                          initialfile=_music_name + "-" + _crc,
                                                           filetypes=[("Structure Files", ".mcstructure")],
                                                           defaultextension=".mcstructure"):
-                if os.path.exists(_save_path): os.remove(_save_path)
-                shutil.copyfile("Cache/output/structure.mcstructure", _save_path)
+
+                with open(_save_path, "wb") as _io:
+                    _io.write(_buffer)
 
         elif _setting["output_format"] == 1:
             if _setting["command_type"] == 0: raise ValueError("Unsupported Command Type!")
@@ -409,7 +406,7 @@ def convertor(_setting, _task_id):
             if _setting["edition"] == 0:
                 if not os.path.exists("Cache/output/functions") :os.makedirs("Cache/output/functions")
 
-                with open("Asset/text/manifest.json", "rb") as _io:
+                with open(path("Asset/text/manifest.json"), "rb") as _io:
                     _manifest_file = json.loads(_io.read())
 
                 _manifest_file["header"]["name"] = _music_name
@@ -436,7 +433,7 @@ def convertor(_setting, _task_id):
                     _io.write(json.dumps(_behavior_file))
 
                 shutil.copyfile(
-                    "Asset/image/icon.png",
+                    path("Asset/image/icon.png"),
                     "Cache/output/pack_icon.png"
                 )
             elif _setting["edition"] == 1:
@@ -767,11 +764,13 @@ def reduce_background(_path: str = "") -> None:
             global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load(_path), (800, 450)).convert_alpha()
             global_asset["blur"] = pygame.transform.gaussian_blur(global_asset["menu"], 3)
 
-            if not os.path.exists("Cache/image"): os.makedirs("Cache/image")
+            if not os.path.exists("Asset/image"): os.makedirs("Asset/image")
             pygame.image.save(global_asset["menu"], "Asset/image/custom_menu_background.png")
+
+            if not os.path.exists("Cache/image"): os.makedirs("Cache/image")
             pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
 
-            ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
+            ui_manager.add_resource(_font_path=path("Asset/font/font.ttf"), _corner_surf=pygame.image.load(path("Asset/image/corner_mask.png")), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
             global_info["message"].append("已成功设置背景！")
     except:
         logger.error(traceback.format_exc())
@@ -790,15 +789,16 @@ def set_selector_num(_num: None | int = None) -> None:
 
 def show_download(_title: str, _url: str, _target_path, _callback=lambda: remove_page(overlay_page)):
     _state = {"state": 0, "object": None}
-    threading.Thread(target=download, args=(_url, _state, _target_path), daemon=True).start()
-    add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "time": 0, "done": False, "callback": _callback}])
+    threading.Thread(target=download, args=(_url, _state, _target_path, _callback), daemon=True).start()
+    add_page(overlay_page, [download_screen, {"state": _state, "title": _title}])
 
 def reboot_to_update():
+    shutil.unpack_archive(path("Asset/updater/package.tar.zst"), "Updater")
     global_info["exit"] = 2
 
 def start_install_editor():
     remove_page(overlay_page)
-    threading.Thread(target=install_editor, daemon=True).start()
+    install_editor()
 
 def install_editor():
     try:
@@ -944,7 +944,7 @@ def get_version_list():
     except:
         logger.error(traceback.format_exc())
 
-def download(_url, _state, _target_path, _extract=True):
+def download(_url, _state, _target_path, _callback, _extract=True):
     try:
         _state["state"] = 0
 
@@ -954,9 +954,14 @@ def download(_url, _state, _target_path, _extract=True):
                 _io.extractall(_target_path)
 
         _state["state"] = 1
+        _callback()
     except:
         logger.error(traceback.format_exc())
         _state["state"] = -1
+
+        time.sleep(3000)
+
+        remove_page(overlay_page)
 
 def update_mcpack():
     try:
@@ -1248,7 +1253,7 @@ def version_list_screen(_info, _input):
                     _info["size"][3] = "--"
                     _info["size"][1] = " V" + str(_ver_info["version"]) + "-" + str(_ver_info["edition"])
                     threading.Thread(target=get_resource_size, args=(_ver_info["download_url"], _info["size"])).start()
-                    add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": (("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]), _ver_info["download_url"], "Cache/extracted", reboot_to_update), "callback": show_download, "content": _info["size"]}], 0, True)
+                    add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": (("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]), _ver_info["download_url"], "Update", reboot_to_update), "callback": show_download, "content": _info["size"]}], 0, True)
                 case 4:
                     _info["index"] = 0
                     _info["tag_index"] += 1
@@ -1294,12 +1299,6 @@ def about_screen(_info, _input):
     return _root
 
 def download_screen(_info, _input):
-    if _info["state"]["state"] == -1 and _info["time"] != -1:
-        _info["time"] += timer.get_time()
-    if _info["time"] >= 3000:
-        remove_page(overlay_page)
-        _info["time"] = -1
-
     if _info["state"]["state"] == -1:
         _text = "下载失败，请重试"
     elif _info["state"]["object"] is None:
@@ -1308,9 +1307,6 @@ def download_screen(_info, _input):
         _text = str(round_45((_info["state"]["object"].tell() / _info["state"]["object"].size) * 100, 2)) + "%" if _info["state"]["object"].size else "等待中"
     elif _info["state"]["state"] == 1:
         _text = "下载完成"
-        if not _info["done"]:
-            _info["callback"]()
-            _info["done"] = True
     else:
         _text = ""
 
@@ -1674,17 +1670,23 @@ def asking_screen(_info, _input):
 
     return _root
 
-global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "Unknown", "animation_speed": 10, "max_selector_num": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
+global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "Unknown", "animation_speed": 10, "max_selector_num": 2, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 
 pygame.display.init()
 pygame.display.set_caption("MIDI-MCSTRUCTURE NEXT  GUI")
-pygame.display.set_icon(pygame.image.load("Asset/image/icon.png"))
+pygame.display.set_icon(pygame.image.load(path("Asset/image/icon.png")))
 window = pygame.display.set_mode((800, 450), pygame.RESIZABLE)
 
 logger = log.Logger(5)
 ui_manager = UIManager()
+
+try:
+    import pyi_splash
+    pyi_splash.close()
+except:
+    logger.debug(traceback.format_exc())
 
 try:
     timer = pygame.time.Clock()
@@ -1743,7 +1745,7 @@ finally:
         io.write(json.dumps(global_info["setting"], indent=2))
 
     if global_info["exit"] == 2:
-        subprocess.Popen("Updater/updater.exe")
+        subprocess.Popen("Updater/updater.exe " + os.path.abspath(""))
 
     if global_info["exit"] == 3:
         window.blit(global_asset["error"], (0, 0))

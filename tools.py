@@ -1,17 +1,17 @@
 import random
 
-def get_list_position(_size: tuple[int], _position: tuple[int]) -> int:
-    _n = _position[2]
-    _n += _position[1] * _size[2]
-    _n += _position[0] * (_size[1] * _size[2])
+def get_list_position(_size: tuple[int], _position) -> int:
+    _n = _position.z
+    _n += _position.y * _size[2]
+    _n += _position.x * (_size[1] * _size[2])
     return _n
 
-def check_position(_size: tuple[int], _position: tuple[[int]]) -> bool:
-    if _position[0] >= _size[0] or _position[0] < 0:
+def check_position(_size: tuple[int], _position) -> bool:
+    if _position.x >= _size[0] or _position.x < 0:
         return False
-    elif _position[1] >= _size[1] or _position[1] < 0:
+    elif _position.y >= _size[1] or _position.y < 0:
         return False
-    elif _position[2] >= _size[2] or _position[2] < 0:
+    elif _position.z >= _size[2] or _position.z < 0:
         return False
     return True
 

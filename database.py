@@ -66,6 +66,7 @@ class Lyrics:
         "__tail",
         "__next"
     )
+
     def __init__(self, _last: str, _head: str, _tail: str, _next: str) -> None:
         if not isinstance(_last, str): raise TypeError("Lyrics must be string!")
         if not isinstance(_head, str): raise TypeError("Lyrics must be string!")
@@ -141,7 +142,7 @@ class InfoList:
         raise ValueError("Couldn't find a Matched Value!")
 
 class LyricsList:
-    def __init__(self, _lyrics_list: dict[int, str], _smooth: bool=True, _join: bool=False):
+    def __init__(self, _lyrics_list: dict[int, str], _smooth: bool=True, _join: bool=False) -> None:
         if not all(isinstance(_i, int) and isinstance(_lyrics_list[_i], str) for _i in _lyrics_list):
             raise TypeError("Unsupported Lyrics Struct!")
 

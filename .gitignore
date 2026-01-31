@@ -5,6 +5,8 @@ build/
 .venv/
 .idea/
 dist/
+Asset/text/default_profile.json
+boot.png
 icon.ico
 log.txt
 *.spec

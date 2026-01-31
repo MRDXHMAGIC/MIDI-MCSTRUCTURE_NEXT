@@ -1,84 +1,83 @@
 import os
-import time
+import sys
 import json
-import shutil
 import traceback
-import subprocess
+from shutil import rmtree, copyfile
 
 log = []
-last_time = 0
-root = os.path.abspath("").replace("\\", "/") + "/"
+def add_log(_hand: str, _content: str, _indent: int = 1) -> None:
+    log.extend(f"[{_hand}]{"  " * _indent}{line.strip()}" for line in _content.splitlines())
+
+
+def get_path(*_paths):
+    return os.path.join(sys.argv[1], *_paths)
+
+def install(_indent: int = 3, _stack = ""):
+    add_log("D", f"{os.path.basename(_stack)}:" if _stack else "RootFolder:", _indent - 1)
+    for _token in os.listdir(get_path("Update", _stack)):
+        if not os.path.isdir(get_path(_stack)):
+            add_log("D", "Make Directory: " + _stack, _indent)
+            os.makedirs(get_path(_stack))
+
+
+        if os.path.join(_stack, _token) in ("Update", "Updater"):
+            add_log("D", "Skip " + os.path.join("Update", _stack, _token), _indent)
+
+        elif os.path.isfile(get_path("Update", _stack, _token)):
+            if os.path.exists(get_path(_stack, _token)):
+                add_log("D", "Replace File: " + _token, _indent)
+                os.replace(get_path("Update", _stack, _token), get_path(_stack, _token))
+            else:
+                add_log("D", "Copy File: " + _token, _indent)
+                copyfile(get_path("Update", _stack, _token), get_path(_stack, _token))
+
+        elif os.path.isdir(get_path("Update", _stack, _token)):
+            install(_indent + 1, os.path.join(_stack, _token))
 
 try:
-    log.append("[N] Load Old Settings")
-    with open(root + "Asset/text/setting.json", "r") as io:
+    add_log("I", "Load Old Settings")
+    with open(get_path("Asset/text/setting.json"), "r", encoding="utf-8") as io:
         old_setting = json.load(io)
 
-    log.append("[I] MMS-NEXT V" + str(old_setting["version"]))
-    log.append("[N] Position: " + root)
+    add_log("I", "MMS-NEXT V" + str(old_setting["version"]))
+    add_log("D", "Position: " + get_path())
 
-    if os.path.exists(root + "Cache/image"):
-        log.append("[N] Wipe Image Cache")
-        shutil.rmtree(root + "Cache/image")
-
-    if os.path.exists(root + "Asset/image/custom_menu_background.png"):
-        log.append("[N] Move Custom Background")
-        shutil.move(root + "Asset/image/custom_menu_background.png", root + "Cache/extracted/Asset/image/custom_menu_background.png")
-
-    log.append("[N] Load New Settings")
-    with open(root + "Cache/extracted/Asset/text/setting.json", "r") as io:
+    add_log("I", "Load New Settings")
+    with open(get_path("Update/Asset/text/setting.json"), "r", encoding="utf-8") as io:
         new_setting = json.load(io)
-    log.append("[N] Copy Settings:")
+
+    add_log("I", "Copy Settings:")
     for k in list(old_setting.keys()):
         if k in new_setting and k not in ("version", "edition"):
-            log.append("[N]   " + str(k) + ": " + str(old_setting[k]) + " -> " + str(new_setting[k]))
+            add_log("I", f"{k}: {old_setting[k]} -> {new_setting[k]}", 2)
             new_setting[k] = old_setting[k]
-    log.append("[N] Save Settings")
-    with open(root + "Cache/extracted/Asset/text/setting.json", "w", encoding="utf-8") as io:
+
+    add_log("I", "Save Settings")
+    with open(get_path("Update/Asset/text/setting.json"), "w", encoding="utf-8") as io:
         json.dump(new_setting, io)
 
-    if os.path.exists(root + "Cache/extracted/Asset/mcstructure") and os.path.exists(root + "Asset/mcstructure"):
-        log.append("[N] Move Structures:")
-        for i in os.listdir(root + "Asset/mcstructure"):
-            if os.path.splitext(i)[1] == ".mcstructure":
-                log.append("[N]     Find: " + i)
-                if not os.path.exists(root + "Cache/extracted/Asset/mcstructure/" + i):
-                    log.append("[N]     Move: " + i)
-                    shutil.move(root + "Asset/mcstructure/" + i, root + "Cache/extracted/Asset/mcstructure/" + i)
 
+    add_log("I", "Install Update:")
+    install()
 
-    log.append("[N] Install Update:")
-    for i in os.listdir(root):
-        if i not in ("Updater", "Cache", "Editor"):
-            log.append("[N]   Try to Remove: " + i)
-            n = 0
-            while n <= 16:
-                try:
-                    if os.path.isdir(root + i):
-                        shutil.rmtree(root + i)
-                    elif os.path.isfile(root + i):
-                        os.remove(root + i)
-                    break
-                except:
-                    n += 1
+    add_log("I", "Rename Main File")
+    for i in os.listdir(get_path()):
+        if os.path.splitext(i)[1] == ".exe": os.rename(get_path(i), get_path("MIDI-MCSTRUCTURE_NEXT.exe"))
+        break
 
-    for i in os.listdir(root + "Cache/extracted"):
-        log.append("[N]   Try to Move: " + i)
-        if os.path.splitext(i)[1] == ".exe":
-            shutil.move(root + "Cache/extracted/" + i, root + "MIDI-MCSTRUCTURE_NEXT.exe")
-        elif os.path.isdir(root + "Cache/extracted/" + i) and i != "Updater":
-            shutil.move(root + "Cache/extracted/" + i, root + i)
+    if os.path.exists("Cache"): rmtree("Cache")
+    if os.path.exists("Update"): rmtree("Update")
 
-    log.append("[I] Update Successfully:")
-    log.append("[I]   V" + str(old_setting["version"]) + " -> V" + str(new_setting["version"]))
+    add_log("I", "Update Successfully:")
+    add_log("I", "V" + str(old_setting["version"]) + " -> V" + str(new_setting["version"]), 2)
 except:
-    log.extend(("[E] " + line for line in traceback.format_exc().splitlines()))
+    add_log("E", traceback.format_exc())
 finally:
     if log:
         with open("update_log.txt", "a", encoding="utf-8") as io:
-            io.write("[V251006R] " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()) + ":\n")
-            io.writelines("  " + line + "\n" for line in log)
+            io.write("[I] MMS Updater (Built at {BUILT_TIME}):\n")
+            io.writelines(line + "\n" for line in log)
 
-    subprocess.Popen(root + "MIDI-MCSTRUCTURE_NEXT.exe")
+    os.startfile(get_path("MIDI-MCSTRUCTURE_NEXT.exe"))
 
     os._exit(0)
