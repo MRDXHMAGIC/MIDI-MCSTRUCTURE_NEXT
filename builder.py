@@ -6,8 +6,6 @@ import tarfile
 import subprocess
 from compression.zstd import CompressionParameter
 
-ONE_FILE = False
-
 with open("Asset/text/setting.json", "rb") as io:
     setting = json.loads(io.read())
 
@@ -31,7 +29,7 @@ with open("dist/Asset/text/setting.json", "rb") as io:
     setting = json.loads(io.read())
 
 setting["log_level"] = 4
-setting["disable_update_check"] = ONE_FILE
+setting["disable_update_check"] = False
 
 with open("dist/Asset/text/setting.json", "w", encoding="utf-8") as io:
     io.write(json.dumps(setting, indent=2))
@@ -53,9 +51,12 @@ if not os.path.exists("dist/Asset/updater"): os.makedirs("dist/Asset/updater")
 with tarfile.open("dist/Asset/updater/package.tar.zst", "w:zst", options=options) as io:
     io.add("dist/Updater", arcname="")
 
-subprocess.Popen(f".venv/Scripts/pyinstaller.exe {"-F" if ONE_FILE else "-D"} -w --optimize 2 --add-data \"dist/Asset/*;./Asset\" --splash boot.png -i icon.ico main.py -y -n \"MIDI-MCSTRUCTURE_NEXT\"").wait()
+subprocess.Popen(f".venv/Scripts/pyinstaller.exe -D -w --optimize 2 --splash boot.png -i icon.ico main.py -y -n \"MIDI-MCSTRUCTURE_NEXT\"").wait()
 
-assert ONE_FILE or not input("Continue?")
+shutil.copytree("dist/Asset", "dist/MIDI-MCSTRUCTURE_NEXT/Asset")
+
+
+assert input("Continue?")
 
 
 with tarfile.open(f"dist/MIDI-MCSTRUCTURE_NEXT_{TITLE}.tar.zst", "w:zst", options=options) as io:

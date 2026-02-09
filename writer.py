@@ -1,7 +1,6 @@
 import io
 import amulet_nbt
 from zlib import crc32
-from tools import get_list_position, check_position
 
 class Position:
     def __init__(self, _position: tuple[int] = (0, 0, 0)) -> None:
@@ -40,6 +39,21 @@ class Position:
 
     def list_pos(self, _size: tuple[int]) -> int:
         return get_list_position(_size, self)
+
+def get_list_position(_size: tuple[int], _position: Position) -> int:
+    _n = _position.z
+    _n += _position.y * _size[2]
+    _n += _position.x * (_size[1] * _size[2])
+    return _n
+
+def check_position(_size: tuple[int], _position: Position) -> bool:
+    if _position.x >= _size[0] or _position.x < 0:
+        return False
+    elif _position.y >= _size[1] or _position.y < 0:
+        return False
+    elif _position.z >= _size[2] or _position.z < 0:
+        return False
+    return True
 
 def change_pos(_position: Position, _direction: int) -> Position:
     if _direction == 0:

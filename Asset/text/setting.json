@@ -2,9 +2,10 @@
   "id": 1,
   "fps": 60,
   "log_level": 5,
-  "version": 18260201,
-  "edition": "Beta",
+  "version": 18260210,
+  "edition": "Beta2",
   "animation_speed": 10,
   "max_selector_num": 8,
-  "disable_update_check": false
+  "compression_level": 0,
+  "disable_update_check": true
 }

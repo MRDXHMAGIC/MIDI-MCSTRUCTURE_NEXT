@@ -307,5 +307,13 @@
     "edition": "Beta",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260201-Beta/MIDI-MCSTRUCTURE_NEXT_V18260201-Beta.tar.zst",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260201-Beta"
+  },
+  {
+    "API": 3,
+    "tips": "\u56de\u9000\u5355\u6587\u4ef6\u7279\u6027\n\u52a0\u5165\u538b\u7f29\u7b49\u7ea7\u8c03\u6574\n\u4f18\u5316\u4ee3\u7801",
+    "version": 18260210,
+    "edition": "Beta2",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260210-Beta2/MIDI-MCSTRUCTURE_NEXT_V18260210-Beta2.tar.zst",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260210-Beta2"
   }
 ]
