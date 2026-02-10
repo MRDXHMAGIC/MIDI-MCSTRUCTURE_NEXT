@@ -587,6 +587,8 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
             yield round_int(_time / _setting["time_per_tick"]), _data["text"]
 
         elif _data["type"] == "note":
+            # 去除打击乐器
+            if _data["percussion"] and not _setting["percussion"]: continue
             # 获取游戏中的音调值
             if 0 <= _data["pitch"] < len(global_asset["profile"]["note_list"]):
                 _pitch = global_asset["profile"]["note_list"][_data["pitch"]]
