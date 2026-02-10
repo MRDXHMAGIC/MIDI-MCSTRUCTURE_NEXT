@@ -56,8 +56,8 @@ class Note:
             )
         )
 
-    def __str__(self) -> str:
-        return f"Note   <pg={self.__program}, pt={self.__pitch}, vl={round_45(self.__volume * self.master_volume, 2)}, pn={self.__panning[0]}-{self.__panning[1]}>"
+    def __repr__(self) -> str:
+        return f"Note<pg={self.__program}, pt={self.__pitch}, vl={round_45(self.__volume * self.master_volume, 2)}, pn=({self.__panning[0]}, {self.__panning[1]})>"
 
 class Lyrics:
     __slots__ = (
@@ -113,8 +113,8 @@ class Lyrics:
             )
         )
 
-    def __str__(self) -> str:
-        return f"Lyrics <{self.__last} | {self.__head} {self.__tail} | {self.__next}>"
+    def __repr__(self) -> str:
+        return f"Lyrics<{self.__last} | {self.__head} {self.__tail} | {self.__next}>"
 
 class InfoList:
     def __init__(self, _init_value) -> None:

@@ -10,6 +10,100 @@
     5.66, 6.0, 6.35, 6.73, 7.13, 7.55, 8.0, 8.47, 8.98, 9.51, 10.08, 10.68,
     11.31
   ],
+  "midi_preview": {
+    "sound_list": {
+      "harp": [
+        ["harp", 0.53, 1.0, 0]
+      ],
+      "pling": [
+        ["pling", 0.4, 1.0, 0]
+      ],
+      "bit": [
+        ["bit", 1.2, 1.0, 0]
+      ],
+      "rain": [
+        ["rain", 1.0, 1.0, 0]
+      ],
+      "xylophone": [
+        ["xylophone", 0.9, 1.0, 0]
+      ],
+      "iron_xylophone": [
+        ["iron_xylophone", 0.86, 1.0, 0]
+      ],
+      "banjo": [
+        ["banjo", 0.8, 1, 0]
+      ],
+      "flute": [
+        ["flute", 0.8, 1.0, 0]
+      ],
+      "chime": [
+        ["chime", 1.0, 1.0, 0]
+      ],
+      "bass": [
+        ["bass", 1.0, 1.0, 0]
+      ],
+      "guitar": [
+        ["guitar", 1.0, 1.0, 0]
+      ],
+      "bell": [
+        ["bell", 3.0, 1.0, 0]
+      ],
+      "cow_bell": [
+        ["cow_bell", 0.68, 1.0, 0]
+      ],
+      "hat": [
+        ["hat", 1.0, 1.0, 0]
+      ],
+      "snare": [
+        ["snare", 1.0, 1.0, 0]
+      ],
+      "base_drum": [
+        ["basedrum", 1.5, 1.0, 0]
+      ],
+      "cymbal": [
+        ["fizz", 1.0, 3.0, 0]
+      ],
+      "open_cymbal": [
+        ["fizz", 1.5, 3.0, 0]
+      ],
+      "pedal_cymbal": [
+        ["fizz", 1.5, 6.0, 0]
+      ],
+      "closed_cymbal": [
+        ["fizz", 1.5, 9.0, 0]
+      ],
+      "cabasa": [
+        ["fizz", 1.2, 3.0, 0]
+      ],
+      "shaker": [
+        ["fizz", 1.2, 6.0, 0]
+      ],
+      "parrot": [
+        ["parrot", 1.0, 1.0, 0]
+      ],
+      "telephone_ring": [
+        ["bit", 2.0, 1.0, 0],
+        ["bit", 2.0, 0.5, 50],
+        ["bit", 2.0, 1.0, 50],
+        ["bit", 2.0, 0.5, 50],
+        ["bit", 2.0, 1.0, 50],
+        ["bit", 2.0, 0.5, 50],
+        ["bit", 2.0, 1.0, 50],
+        ["bit", 2.0, 0.5, 50]
+      ],
+      "helicopter": [
+        ["breeze_idle_ground", 0.5, 1.0, 0],
+        ["breeze_death", 0.5, 1.0, 0],
+        ["breeze_death", 0.5, 1.0, 100],
+        ["breeze_death", 0.5, 1.0, 100],
+        ["breeze_death", 0.5, 1.0, 100],
+        ["breeze_death", 0.5, 1.0, 100],
+        ["breeze_death", 0.5, 1.0, 100],
+        ["breeze_death", 0.5, 1.0, 100],
+        ["breeze_death", 0.5, 1.0, 100]
+      ]
+    }
+  },
   "new_bedrock": {
     "command": {
       "delay": [

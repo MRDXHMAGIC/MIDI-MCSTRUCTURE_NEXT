@@ -136,9 +136,9 @@ def asset_load() -> None:
             logger.info("Copy Backup Profile")
             shutil.copy("Asset/text/profile.json", "Asset/text/default_profile.json")
 
-        if os.path.isdir("Update"):
-            logger.info("Removing Update Files...")
-            shutil.rmtree("Update")
+        if os.path.isdir("Updater"):
+            logger.info("Removing Updater...")
+            shutil.rmtree("Updater")
 
         logger.debug("Scanning .mcstructure Files...")
         global_asset["structure"] = []
@@ -168,7 +168,7 @@ def asset_load() -> None:
 
         remove_page(overlay_page)
         global_info["message_info"][2] = True
-        add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0, 0]}], 0, False)
+        add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0, 0, 0]}], 0, False)
         if global_info["convertor"]["file"]: add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}])
     except:
         global_info["exit"] = 3
@@ -232,11 +232,13 @@ def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
 # MIDI转换
 def convertor(_setting, _task_id):
     # 添加正在处理页面
-    add_page(overlay_page, [processing_screen, {}])
+    if _setting["output_format"] != 3: add_page(overlay_page, [processing_screen, {}])
 
     try:
         # 根据设置的游戏版本选择合适的配置文件
-        if global_info["convertor"]["edition"] == 0:
+        if  _setting["output_format"] == 3:
+            _profile = global_asset["profile"]["midi_preview"]
+        elif global_info["convertor"]["edition"] == 0:
             if global_info["convertor"]["version"] == 0:
                 _profile = global_asset["profile"]["old_bedrock"]
             elif global_info["convertor"]["version"] == 1:
@@ -257,25 +259,26 @@ def convertor(_setting, _task_id):
         try:
             with open("Cache/mapping/" + _path_hash + ".pkl", "rb") as _io:
                 _mapping = pickle.load(_io)
-            global_info["message"].append("请调整乐器音色映射方案（已加载缓存方案）")
+            if _setting["ask_mapping"]: global_info["message"].append("请调整乐器音色映射方案（已加载缓存方案）")
         except:
-            logger.warn(traceback.format_exc())
+            logger.debug(traceback.format_exc())
             _mapping = {}
-            global_info["message"].append("请调整乐器音色映射方案")
+            if _setting["ask_mapping"]: global_info["message"].append("请调整乐器音色映射方案")
 
-        _instruments = _midi_reader.scan_instruments()
+        if _setting["ask_mapping"]:
+            _instruments = _midi_reader.scan_instruments()
 
-        _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0, "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": [False]}
-        add_page(overlay_page, [adj_mapping_screen, _info])
+            _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0, "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": [False]}
+            add_page(overlay_page, [adj_mapping_screen, _info])
 
-        while not _info["done"][0]:
-            time.sleep(0.1)
+            while not _info["done"][0]:
+                time.sleep(0.1)
 
-        try:
-            with open("Cache/mapping/" + _path_hash + ".pkl", "wb") as _io:
-                pickle.dump(_mapping, _io, protocol=5)
-        except:
-            logger.warn(traceback.format_exc())
+            try:
+                with open("Cache/mapping/" + _path_hash + ".pkl", "wb") as _io:
+                    pickle.dump(_mapping, _io, protocol=5)
+            except:
+                logger.debug(traceback.format_exc())
 
         _midi_reader.override_mapping(_mapping)
 
@@ -494,11 +497,17 @@ def convertor(_setting, _task_id):
                                                           defaultextension=".mcpack"):
                 if os.path.exists(_save_path): os.remove(_save_path)
                 shutil.copyfile("Cache/output/package.zip", _save_path)
+        elif _setting["output_format"] == 3:
+            time.sleep(1)
+            _setting["player_info"]["armed"] = True
+            while _setting["player_info"]["armed"]:
+                time.sleep(0.5)
+                print(123)
     except:
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         logger.error(traceback.format_exc())
     finally:
-        remove_page(overlay_page)
+        if _setting["output_format"] != 3: remove_page(overlay_page)
 
 def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[int, Note | str]:
     _note_buffer = {}
@@ -545,7 +554,7 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
                     _note_velocity *= _note[1]
 
                 # 返回音符数据
-                yield round_int((_time + _delay_time) / _setting["time_per_tick"]), Note(_note[0], (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"]], _note_pitch, _data["panning"])
+                yield round_int((_time + _delay_time) / _setting["time_per_tick"]), Note(_note[0], (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], _note_pitch, _data["panning"])
         else:
             raise TypeError("Unknown Data Type: " + str(_data["type"]))
 
@@ -753,7 +762,6 @@ def change_button_alpha(_state: list[float], _index: int) -> None:
 
 def produce_background(_path: str = "") -> None:
     try:
-        if not _path: _path = filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")])
         if _path:
             global_asset["menu"] = pygame.transform.smoothscale(pygame.image.load(_path), (800, 450)).convert_alpha()
             global_asset["blur"] = pygame.transform.gaussian_blur(global_asset["menu"], 3)
@@ -765,9 +773,11 @@ def produce_background(_path: str = "") -> None:
 
             ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
             global_info["message"].append("已成功设置背景！")
+        else:
+            threading.Thread(target=open_filedialog, args=(produce_background, (("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")))).start()
     except:
-        logger.error(traceback.format_exc())
         global_info["message"].append("无法加载图片文件！")
+        raise
 
 def set_selector_num(_num: None | int = None) -> None:
     if _num is None:
@@ -820,7 +830,6 @@ def enter_to_editor(_path: str = ""):
             logger.error(traceback.format_exc())
 
             if global_info["editor_update"]["version"] > 0:
-
                 _text = ["你需要MMS配置文件编辑器 V", str(global_info["editor_update"]["version"]), "，是否安装？\n软件包大小为", "--", "MB"]
                 threading.Thread(target=get_resource_size, args=(global_info["editor_update"]["download_url"], _text), daemon=True).start()
                 add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": ("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], "Editor", start_install_editor), "callback": show_download, "content": _text}], 0, True)
@@ -838,16 +847,66 @@ def enter_to_editor(_path: str = ""):
     finally:
         if _remove: remove_page(overlay_page)
 
-def open_filedialog():
+def open_filedialog(_callback, _type: tuple[tuple[str]], *_args):
     try:
-        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=[("MIDI Files", ".mid")]):
-            global_info["convertor"]["file"] = _path
-            if os.path.exists(os.path.splitext(_path)[0] + ".lrc"):
-                global_info["message"].append("检测到同名的.lrc文件，启用歌词显示即可加载歌词！")
-            else:
-                global_info["message"].append("未检测到同名的.lrc文件，若启用歌词显示将尝试从MIDI中获取")
+        if _path := filedialog.askopenfilename(title="MIDI-MCSTRUCTURE NEXT", filetypes=_type):
+            _callback(_path, *_args)
     except:
         logger.error(traceback.format_exc())
+
+def midi_file_callback(_path: str):
+    global_info["convertor"]["file"] = _path
+    if os.path.exists(os.path.splitext(_path)[0] + ".lrc"):
+        global_info["message"].append("检测到同名的.lrc文件，启用歌词显示即可加载歌词！")
+    else:
+        global_info["message"].append("未检测到同名的.lrc文件，若启用歌词显示将尝试从MIDI中获取")
+
+def player_callback(_path: str, _ask: bool, _info):
+    _info["armed"] = False
+    _info["file"] = _path
+    try:
+        convertor(
+            {
+                "file": _path,
+                "edition": 0,
+                "version": 1,
+                "command_type": 0,
+                "output_format": 3,
+                "volume": global_info["convertor"]["volume"],
+                "structure": 0,
+                "skip": False,
+                "time_per_tick": global_info["convertor"]["time_per_tick"],
+                "max_time_error": global_info["convertor"]["max_time_error"],
+                "enable_accurate_tick": global_info["convertor"]["enable_accurate_tick"],
+                "adjustment": False,
+                "percussion": global_info["convertor"]["percussion"],
+                "panning": False,
+                "lyrics": {
+                    "enable": global_info["convertor"]["lyrics"]["enable"],
+                    "smooth": global_info["convertor"]["lyrics"]["smooth"],
+                    "joining": global_info["convertor"]["lyrics"]["joining"]
+                },
+                "compression": 1,
+                "ask_mapping": _ask,
+                "player_info": _info
+             },
+            None
+        )
+    finally:
+        _info["armed"] = True
+
+def enter_player():
+    if os.path.exists("Cache/sounds") and os.path.exists("Cache/sounds/" + str(global_info["sounds_update"]["version"]) + ".ver"):
+        if global_info["convertor"]["time_per_tick"] == -1:
+            global_info["convertor"]["time_per_tick"] = 50
+        add_page(overlay_page, [player_screen, {"button_state": [0, 0, 0, 0, 0], "file": "", "play": False, "armed": True}])
+    elif global_info["sounds_update"]["version"] == -1:
+        global_info["message"].append("MMS音乐预览需要下载音效包，但目前无网络连接")
+        logger.info("No Internet Connection.")
+    else:
+        _text = ["你需要Minecraft音效包 V", str(global_info["sounds_update"]["version"]), "，是否下载？\n音效包大小为", "--", "MB"]
+        threading.Thread(target=get_resource_size, args=(global_info["editor_update"]["download_url"], _text), daemon=True).start()
+        add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载", "取消"], "argument": ("SoundCollection V" + str(global_info["sounds_update"]["version"]), global_info["sounds_update"]["download_url"], "Cache/sounds", enter_player), "callback": show_download, "content": _text}], 0, True)
 
 def set_time_per_tick(_time: None | int = None) -> None:
     if _time is None:
@@ -921,6 +980,8 @@ def get_version_list():
                 case 5:
                     global_info["mcpack_update"][0] = _i["hash"]
                     global_info["mcpack_update"][1] = _i["download_url"]
+                case 6:
+                    global_info["sounds_update"] = _i
                 case _:
                     logger.debug("Unknown API Version: " + str(_i["API"]))
 
@@ -1012,9 +1073,10 @@ def menu_screen(_info, _input):
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, ("转换文件", 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("软件设置", 0.035, _info["button_state"][1]), 1),
-            (0.025, 0.311, 0.95, 0.089, (f"发现新版本 " + global_info["new_version"] if global_info["new_version"] else "查看更新", 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.444, 0.95, 0.089, ("关于MIDI-MCSTRUCTURE NEXT", 0.035, _info["button_state"][3]), 3)
+            (0.025, 0.177, 0.95, 0.089, ("试听音乐", 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("软件设置", 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.444, 0.95, 0.089, ("发现新版本 " + global_info["new_version"] if global_info["new_version"] else "查看更新", 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.578, 0.95, 0.089, ("关于MIDI-MCSTRUCTURE NEXT", 0.035, _info["button_state"][4]), 4)
         ),
         pygame.mouse.get_pos()
     )
@@ -1024,10 +1086,12 @@ def menu_screen(_info, _input):
             case 0:
                 add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}])
             case 1:
-                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0]}])
+                enter_player()
             case 2:
-                add_page(overlay_page, [version_list_screen, {"size": ["你是否要下载并安装", "该版本", "？\n该软件包大小为", "--", "MB"], "tag_index": 0, "index": 0, "edition_info": global_info["update_list"], "button_state": [0, 0, 0, 0, 0]}])
+                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0]}])
             case 3:
+                add_page(overlay_page, [version_list_screen, {"size": ["你是否要下载并安装", "该版本", "？\n该软件包大小为", "--", "MB"], "tag_index": 0, "index": 0, "edition_info": global_info["update_list"], "button_state": [0, 0, 0, 0, 0]}])
+            case 4:
                 if global_info["setting"]["version"]:
                     _edition = "V" + str(global_info["setting"]["version"])
                 else:
@@ -1037,6 +1101,64 @@ def menu_screen(_info, _input):
                 add_page(overlay_page, [about_screen, {"edition": _edition, "button_state": [0, 0, 0]}])
 
     change_button_alpha(_info["button_state"], _id)
+
+    return _root
+
+def player_screen(_info, _input):
+    if ("mouse_right" in _input and not _input["mouse_right"]) and _info["armed"]:
+        remove_page(overlay_page)
+        _info["armed"] = False
+
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, (os.path.splitext(os.path.basename(_info["file"]))[0] if _info["file"] else "选择MIDI文件", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("播放设置", 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.05, 0.089, ("◀", 0.035, _info["button_state"][2]), 2),
+            (0.1, 0.311, 0.8, 0.089, (("暂停" if _info["play"] else "开始") if _info["armed"] else "处理中", 0.035, _info["button_state"][3]), 3),
+            (0.925, 0.311, 0.05, 0.089, ("▶", 0.035, _info["button_state"][4]), 4)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                if _info["armed"]: threading.Thread(target=open_filedialog, args=(player_callback, [("MIDI Files", ".mid")], True, _info), daemon=True).start()
+            case 1:
+                add_page(overlay_page, [player_setting_screen, {"button_state": [0, 0, 0, 0], "info": _info}])
+            case 3:
+                _info["play"] = not _info["play"]
+
+    change_button_alpha(_info["button_state"], _id)
+
+    return _root
+
+def player_setting_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        threading.Thread(target=player_callback, args=(_info["info"]["file"], False, _info["info"])).start()
+        remove_page(overlay_page)
+
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("播放速度设置", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("歌词字幕设置", 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("打击乐器 " + ("保留" if global_info["convertor"]["percussion"] else "去除"), 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.444, 0.95, 0.089, ("平均音量 " + (str(global_info["convertor"]["volume"]) + "%" if global_info["convertor"]["volume"] else "保持原始音量"), 0.035, _info["button_state"][3]), 3)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    change_button_alpha(_info["button_state"], _id)
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0: add_page(overlay_page, [speed_setting_screen, {"button_state": [0, 0, 0]}])
+            case 1: add_page(overlay_page, [lyrics_setting_screen, {"button_state": [0, 0, 0]}])
+            case 2: global_info["convertor"]["percussion"] = not global_info["convertor"]["percussion"]
+            case 3:
+                global_info["convertor"]["volume"] += 10
+                if global_info["convertor"]["volume"] >= 110:
+                    global_info["convertor"]["volume"] = 0
 
     return _root
 
@@ -1125,7 +1247,7 @@ def convertor_screen(_info, _input):
     if "mouse_left" in _input and not _input["mouse_left"]:
         match _id:
             case 0:
-                threading.Thread(target=open_filedialog, daemon=True).start()
+                threading.Thread(target=open_filedialog, args=(midi_file_callback, [("MIDI Files", ".mid")]), daemon=True).start()
             case 1:
                 if global_info["convertor"]["edition"] == -1:
                     global_info["convertor"]["edition"] = 0
@@ -1521,7 +1643,7 @@ def speed_setting_screen(_info, _input):
             (0.025, 0.044, 0.95, 0.089, (f"播放速度 {global_info["convertor"]["time_per_tick"]}ms/tick", 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, (f"时间对齐 {("启用" if global_info["convertor"]["enable_accurate_tick"] else "关闭")}", 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, (f"最大容差 ±{global_info["convertor"]["max_time_error"]}ms", 0.035, _info["button_state"][2]), 2)
-        ),
+        )[:3 if global_info["convertor"]["enable_accurate_tick"] else 2],
         pygame.mouse.get_pos()
     )
 
@@ -1670,7 +1792,7 @@ def asking_screen(_info, _input):
 
     return _root
 
-global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "Unknown", "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False}}
+global_info = {"exit": 0, "watch_dog": 0, "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": 0, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "Unknown", "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": 1, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

@@ -60,7 +60,7 @@ try:
     add_log("I", "Install Update:")
     install()
 
-    add_log("I", "Rename Main File")
+    add_log("I", "Rename Main Executable File")
     for i in os.listdir(get_path()):
         if os.path.splitext(i)[1] == ".exe": os.rename(get_path(i), get_path("MIDI-MCSTRUCTURE_NEXT.exe"))
         break
