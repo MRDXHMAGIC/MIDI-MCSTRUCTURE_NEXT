@@ -17,7 +17,7 @@ class Note:
 
         self.__program = _program
 
-        self.__pitch = round_45(_pitch, 2)
+        self.__pitch = round_45(_pitch, 3)
         self.__volume = round_45(_volume, 2)
         self.__panning = (round_45(_panning[0], 2), round_45(_panning[1], 2))
 

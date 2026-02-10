@@ -61,22 +61,22 @@
         ["basedrum", 1.5, 1.0, 0]
       ],
       "cymbal": [
-        ["fizz", 1.0, 3.0, 0]
+        ["sand", 1.0, 3.0, 0]
       ],
       "open_cymbal": [
-        ["fizz", 1.5, 3.0, 0]
+        ["sand", 1.5, 3.0, 0]
       ],
       "pedal_cymbal": [
-        ["fizz", 1.5, 6.0, 0]
+        ["sand", 1.5, 6.0, 0]
       ],
       "closed_cymbal": [
-        ["fizz", 1.5, 9.0, 0]
+        ["sand", 1.5, 9.0, 0]
       ],
       "cabasa": [
-        ["fizz", 1.2, 3.0, 0]
+        ["sand", 1.2, 3.0, 0]
       ],
       "shaker": [
-        ["fizz", 1.2, 6.0, 0]
+        ["sand", 1.2, 6.0, 0]
       ],
       "parrot": [
         ["parrot", 1.0, 1.0, 0]
