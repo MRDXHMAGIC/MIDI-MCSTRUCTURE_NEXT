@@ -84,7 +84,7 @@ def asset_load() -> None:
         if not global_info["setting"]["disable_update_check"]:
             threading.Thread(target=get_version_list, daemon=True).start()
         else:
-            logger.info("Disable Update Check")
+            logger.info("Update Check is Disable.")
 
         logger.set_log_level(global_info["setting"]["log_level"])
 
@@ -763,51 +763,55 @@ def load_lrc(_lines: list[str], _time_per_tick: int = 50) -> dict[int, str]:
 
 # 页面渲染函数
 def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
+    _pages = []
     _pages_num = len(_overlay)
-    for _n in range(_pages_num):
-        if _n + 1 == _pages_num or _overlay[_n + 1][2] != 1:
-            try:
-                _window = _overlay[_n][0](_overlay[_n][1], _event if _overlay[_n][3] else {})
-                _window.set_alpha(_overlay[_n][2] * 255)
-                _root.blit(_window, (0, 0))
-
-                if _overlay[_n][3]:
-                    _overlay[_n][2] += (1.01 - _overlay[_n][2]) * global_info["animation_speed"]
-                    if _overlay[_n][2] >= 1:
-                        _overlay[_n][2] = 1
-                else:
-                    _overlay[_n][2] += (-0.01 - _overlay[_n][2]) * global_info["animation_speed"]
-                    if _overlay[_n][2] <= 0:
-                        _overlay[_n][2] = 0
-            except:
-                global_info["message"].append("MMS-UI错误，请将log.txt发送给开发者以修复问题！")
-                logger.error(traceback.format_exc())
-                del _overlay[_n:]
-                return
-
     for _n in range(_pages_num - 1, -1, -1):
-        if _overlay[_n][2] == 0:
-            del _overlay[_n]
+        try:
+            _window = _overlay[_n][0](_overlay[_n][1], _event if _n + 1 == _pages_num and _overlay[_n][2] == 1 else {})
+            _window.set_alpha(round_int(_overlay[_n][2] * 255))
+            _pages.append(_window)
+
+            if _overlay[_n][3]:
+                _overlay[_n][2] += (1.1 - _overlay[_n][2]) * global_info["animation_speed"]
+                if _overlay[_n][2] >= 1: _overlay[_n][2] = 1
+            else:
+                _overlay[_n][2] += (-0.1 - _overlay[_n][2]) * global_info["animation_speed"]
+        except:
+            global_info["message"].append("MMS-UI错误，请将log.txt发送给开发者以修复问题！")
+            logger.error(traceback.format_exc())
+            del _overlay[_n:]
+            return
+
+        if _overlay[_n][2] == 1: break
+        elif _overlay[_n][2] <= 0: del _overlay[_n]
+
+    _root.blits((_page, (0, 0)) for _page in reversed(_pages))
 
     if global_info["message"] and global_info["message_info"][2]:
-        global_info["message_info"][1] += timer.get_time()
+        _h = global_info["message_info"][0] * 0.089
 
-        _root.blit(global_asset["message_mask"], ui_manager.get_abs_position((0, 1 - global_info["message_info"][0] * 0.089), True))
+        if ui_manager.get_abs_position((0, _h))[1] <= 3 and global_info["message_info"][1] > 3000:
+            global_info["message_info"] = [0, 0, True]
+            del global_info["message"][0]
 
-        _text_surface = global_asset["font"].render(global_info["message"][0], True, global_info["color"])
-        _text_surface.set_alpha(255 * global_info["message_info"][0])
+        try:
+            _message_surf = pygame.transform.box_blur(_root.subsurface((ui_manager.get_abs_position((0, 1 - _h), True) + ui_manager.get_abs_position((1, _h)))), 2)
+            _text_surface = global_asset["font"].render(global_info["message"][0], True, global_info["color"])
+            _text_surface.set_alpha(255 * global_info["message_info"][0])
 
-        _text_position = ui_manager.get_abs_position((0.5, 1.044 - global_info["message_info"][0] * 0.089), True)
-        _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - global_asset["font"].get_height() / 2))
+            _text_position = ui_manager.get_abs_position((0.5, 1.044 - _h), True)
+            _message_surf.blits(((global_asset["message_mask"], (0, 0)), (_text_surface, ((_message_surf.size[0] - _text_surface.get_size()[0]) / 2, (ui_manager.get_abs_position((0, 0.089))[1] - global_asset["font"].get_height()) / 2))))
+
+            _root.blit(_message_surf, ui_manager.get_abs_position((0, 1 - _h), True))
+        except:
+            pass
 
         if global_info["message_info"][1] <= 3000:
             global_info["message_info"][0] += (1 - global_info["message_info"][0]) * global_info["animation_speed"]
         else:
             global_info["message_info"][0] -= global_info["message_info"][0] * global_info["animation_speed"]
 
-            if global_info["message_info"][0] < 0.01:
-                del global_info["message"][0]
-                global_info["message_info"] = [0, 0, True]
+        global_info["message_info"][1] += timer.get_time()
 
 # 功能函数
 def get_color(_surf: pygame.Surface) -> tuple[int]:
@@ -893,6 +897,16 @@ def produce_background(_path: str = "") -> None:
         global_info["message"].append("无法加载图片文件！")
         raise
 
+def set_volume(_num: None | int = None):
+    if _num is None:
+        global_info["message"].append("请输入平均音量！")
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["convertor"]["volume"], "text": "%", "callback": set_volume, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
+    else:
+        if 0 < _num <= 100:
+            global_info["convertor"]["volume"] = _num
+        else:
+            global_info["message"].append("平均音量需要在0%到100%之间！")
+
 def set_selector_num(_num: None | int = None) -> None:
     if _num is None:
         global_info["message"].append("请输入最多压缩到单条指令内的时间项数！")
@@ -913,12 +927,9 @@ def reboot_to_update():
     shutil.unpack_archive("Asset/updater/package.tar.zst", "Updater")
     global_info["exit"] = 2
 
-def start_install_editor():
-    remove_page(overlay_page)
-    install_editor()
-
 def install_editor():
     try:
+        remove_page(overlay_page)
         enter_to_editor()
     except:
         logger.error(traceback.format_exc())
@@ -946,7 +957,7 @@ def enter_to_editor(_path: str = ""):
             if global_info["editor_update"]["version"] > 0:
                 _text = ["你需要MMS配置文件编辑器 V", str(global_info["editor_update"]["version"]), "，是否安装？\n软件包大小为", "--", "MB"]
                 threading.Thread(target=get_resource_size, args=(global_info["editor_update"]["download_url"], _text), daemon=True).start()
-                add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": ("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], "Editor", start_install_editor), "callback": show_download, "content": _text}], 0, True)
+                add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": ("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], "Editor", install_editor), "callback": show_download, "content": _text}], 0, True)
             else:
                 global_info["message"].append("无法加载编辑器版本信息，请稍后重试！")
 
@@ -1007,7 +1018,7 @@ def player_callback(_path: str, _ask: bool, _info):
                     "joining": global_info["convertor"]["lyrics"]["joining"]
                 },
                 "compression": 1,
-                "ask_mapping": _ask,
+                "ask_mapping": _ask and global_info["setting"]["ask_mapping"],
                 "player_info": _info
              },
             None
@@ -1059,6 +1070,7 @@ def start_task(_id: None | int = None) -> None:
         if _id is not None: global_info["setting"]["id"] = _id
         _argument = global_info["convertor"].copy()
         _argument["level"] = global_info["setting"]["compression_level"]
+        _argument["ask_mapping"] = global_info["setting"]["ask_mapping"]
         _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
         threading.Thread(target=convertor, args=(_argument, _id), daemon=True).start()
 
@@ -1209,7 +1221,7 @@ def menu_screen(_info, _input):
             case 1:
                 enter_to_player(False)
             case 2:
-                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0]}])
+                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0]}])
             case 3:
                 add_page(overlay_page, [version_list_screen, {"size": ["你是否要下载并安装", "该版本", "？\n该软件包大小为", "--", "MB"], "tag_index": 0, "index": 0, "edition_info": global_info["update_list"], "button_state": [0, 0, 0, 0, 0]}])
             case 4:
@@ -1310,10 +1322,7 @@ def player_setting_screen(_info, _input):
             case 1: add_page(overlay_page, [lyrics_setting_screen, {"button_state": [0, 0, 0]}])
             case 2: global_info["convertor"]["percussion"] = not global_info["convertor"]["percussion"]
             case 3: global_info["convertor"]["adjustment"] = not global_info["convertor"]["adjustment"]
-            case 4:
-                global_info["convertor"]["volume"] += 10
-                if global_info["convertor"]["volume"] >= 110:
-                    global_info["convertor"]["volume"] = 0
+            case 4: set_volume()
 
     return _root
 
@@ -1454,13 +1463,69 @@ def software_setting_screen(_info, _input):
 
     _root, _id = ui_manager.apply_ui(
         (
-            (0.025, 0.044, 0.95, 0.089, ("指令压缩等级 " + ["标准", "高", "极限"][global_info["setting"]["compression_level"]], 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("单指令内时间数 " + str(global_info["setting"]["max_selector_num"]), 0.035, _info["button_state"][1]), 1),
-            (0.025, 0.311, 0.95, 0.089, ("界面刷新率 " + (str(global_info["setting"]["fps"]) + "Hz" if global_info["setting"]["fps"] else "无限制"), 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.444, 0.95, 0.089, ("动画速度 " + (str(global_info["setting"]["animation_speed"]) if global_info["setting"]["animation_speed"] != 0 else "禁用"), 0.035, _info["button_state"][3]), 3),
-            (0.025, 0.578, 0.95, 0.089, ("日志等级 " + _text, 0.035, _info["button_state"][4]), 4),
-            (0.025, 0.711, 0.95, 0.089, ("自定义背景", 0.035, _info["button_state"][5]), 5),
-            (0.025, 0.844, 0.95, 0.089, ("MMS指令编辑器", 0.035, _info["button_state"][6]), 6)
+            (0.025, 0.044, 0.95, 0.089, ("MMS指令编辑器", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("指令压缩设置", 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("个性化设置", 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.444, 0.95, 0.089, ("询问映射关系 " + ("是" if global_info["setting"]["ask_mapping"] else "不"), 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.578, 0.95, 0.089, ("日志等级 " + _text, 0.035, _info["button_state"][4]), 4)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0: threading.Thread(target=enter_to_editor, daemon=True).start()
+            case 1: add_page(overlay_page, [compression_setting_screen, {"button_state": [0, 0]}])
+            case 2: add_page(overlay_page, [custom_setting_screen, {"button_state": [0, 0, 0]}])
+            case 3: global_info["setting"]["ask_mapping"] = not global_info["setting"]["ask_mapping"]
+            case 4:
+                global_info["setting"]["log_level"] += 1
+                if global_info["setting"]["log_level"] >= 6:
+                    global_info["setting"]["log_level"] = 0
+                logger.set_log_level(global_info["setting"]["log_level"])
+
+    change_button_alpha(_info["button_state"], _id)
+
+    return _root
+
+def custom_setting_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        remove_page(overlay_page)
+
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("界面刷新率 " + (str(global_info["setting"]["fps"]) + "Hz" if global_info["setting"]["fps"] else "无限制"), 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("界面动画速度 " + (str(global_info["setting"]["animation_speed"]) if global_info["setting"]["animation_speed"] != 0 else "禁用"), 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("更改界面背景", 0.035, _info["button_state"][2]), 2)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                global_info["setting"]["fps"] += 30
+                if global_info["setting"]["fps"] > 120:
+                    global_info["setting"]["fps"] = 0
+            case 1:
+                global_info["setting"]["animation_speed"] += 1
+                if global_info["setting"]["animation_speed"] >= 16:
+                    global_info["setting"]["animation_speed"] = 0
+            case 2:
+                threading.Thread(target=produce_background, daemon=True).start()
+
+    change_button_alpha(_info["button_state"], _id)
+
+    return _root
+
+def compression_setting_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        remove_page(overlay_page)
+
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("参数压缩等级 " + ["标准", "高", "极限"][global_info["setting"]["compression_level"]], 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("指令压缩条数 " + str(global_info["setting"]["max_selector_num"]), 0.035, _info["button_state"][1]), 1)
         ),
         pygame.mouse.get_pos()
     )
@@ -1473,23 +1538,6 @@ def software_setting_screen(_info, _input):
                     global_info["setting"]["compression_level"] = 0
             case 1:
                 set_selector_num()
-            case 2:
-                global_info["setting"]["fps"] += 30
-                if global_info["setting"]["fps"] > 120:
-                    global_info["setting"]["fps"] = 0
-            case 3:
-                global_info["setting"]["animation_speed"] += 1
-                if global_info["setting"]["animation_speed"] >= 16:
-                    global_info["setting"]["animation_speed"] = 0
-            case 4:
-                global_info["setting"]["log_level"] += 1
-                if global_info["setting"]["log_level"] >= 6:
-                    global_info["setting"]["log_level"] = 0
-                logger.set_log_level(global_info["setting"]["log_level"])
-            case 5:
-                threading.Thread(target=produce_background, daemon=True).start()
-            case 6:
-                threading.Thread(target=enter_to_editor, daemon=True).start()
 
     change_button_alpha(_info["button_state"], _id)
 
@@ -1749,9 +1797,7 @@ def setting_screen(_info, _input):
                         else:
                             global_info["convertor"]["command_type"] = 1
             case 2:
-                global_info["convertor"]["volume"] += 10
-                if global_info["convertor"]["volume"] >= 110:
-                    global_info["convertor"]["volume"] = 0
+                set_volume()
             case 3:
                 if global_info["convertor"]["output_format"] == 0: global_info["convertor"]["structure"] += 1
                 if global_info["convertor"]["structure"] >= len(global_asset["structure"]): global_info["convertor"]["structure"] = 0
@@ -1826,7 +1872,7 @@ def lyrics_setting_screen(_info, _input):
         (
             (0.025, 0.044, 0.95, 0.089, ("歌词显示 " + ("启用" if global_info["convertor"]["lyrics"]["enable"] else "关闭"), 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, ("平滑进度 " + ("启用" if global_info["convertor"]["lyrics"]["smooth"] else "关闭"), 0.035, _info["button_state"][1]), 1),
-            (0.025, 0.311, 0.95, 0.089, ("自动分割 " + ("启用" if global_info["convertor"]["lyrics"]["joining"] else "关闭"), 0.035, _info["button_state"][2]), 2)
+            (0.025, 0.311, 0.95, 0.089, ("自动合并 " + ("启用" if global_info["convertor"]["lyrics"]["joining"] else "关闭"), 0.035, _info["button_state"][2]), 2)
         ),
         pygame.mouse.get_pos()
     )
@@ -1953,7 +1999,7 @@ def asking_screen(_info, _input):
 
     return _root
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": 0, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "log_level": 5, "version": 0, "edition": "Unknown", "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": 1, "ask_mapping": True}}
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": 0, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 
@@ -2016,8 +2062,8 @@ try:
 except KeyboardInterrupt:
     global_info["exit"] = 1
 except:
-    global_info["exit"] = 3
     logger.fatal(traceback.format_exc())
+    global_info["exit"] = 3
 finally:
     if global_info["exit"] != 3: pygame.quit()
 

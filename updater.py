@@ -35,6 +35,8 @@ def install(_indent: int = 3, _stack = ""):
             install(_indent + 1, os.path.join(_stack, _token))
 
 try:
+    os.chdir(get_path())
+
     add_log("I", "Load Old Settings")
     with open(get_path("Asset/text/setting.json"), "r", encoding="utf-8") as io:
         old_setting = json.load(io)
@@ -74,7 +76,7 @@ except:
     add_log("E", traceback.format_exc())
 finally:
     if log:
-        with open("update_log.txt", "a", encoding="utf-8") as io:
+        with open(get_path("update_log.txt"), "a", encoding="utf-8") as io:
             io.write("[I] MMS Updater (Built at {BUILT_TIME}):\n")
             io.writelines(line + "\n" for line in log)
 

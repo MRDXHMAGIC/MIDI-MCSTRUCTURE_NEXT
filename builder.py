@@ -29,6 +29,8 @@ with open("dist/Asset/text/setting.json", "rb") as io:
     setting = json.loads(io.read())
 
 setting["log_level"] = 4
+setting["ask_mapping"] = False
+setting["compression_level"] = 0
 setting["disable_update_check"] = False
 
 with open("dist/Asset/text/setting.json", "w", encoding="utf-8") as io:

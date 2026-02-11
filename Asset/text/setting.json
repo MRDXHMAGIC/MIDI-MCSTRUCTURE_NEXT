@@ -1,9 +1,10 @@
 {
   "id": 1,
   "fps": 60,
+  "version": 18260212,
+  "edition": "RC",
   "log_level": 5,
-  "version": 18260211,
-  "edition": "Beta3",
+  "ask_mapping": false,
   "animation_speed": 10,
   "max_selector_num": 8,
   "compression_level": 0,
