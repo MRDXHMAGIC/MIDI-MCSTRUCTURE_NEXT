@@ -27,30 +27,6 @@
   },
   {
     "API": 0,
-    "hash": "137b6fe68b113d3e5cd4188583ad0183",
-    "version": 10250716,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V10250716-Alpha/MIDI-MCSTRUCTURE_NEXT_V10250716-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V10250716-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "04ef7189c86973b5d2b6085d86c69810",
-    "version": 10250718,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V10250718-Beta/MIDI-MCSTRUCTURE_NEXT_V10250718-Beta.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V10250718-Beta"
-  },
-  {
-    "API": 0,
-    "hash": "716a1e5869cbe0fc615b468ca763dde3",
-    "version": 10250719,
-    "edition": "ReleaseCandidate",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V10250719-RC/MIDI-MCSTRUCTURE_NEXT_V10250719-RC.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V10250719-RC"
-  },
-  {
-    "API": 0,
     "hash": "c1dead9ac4d7b32a07a6d5ee2c80a754",
     "version": 10250720,
     "edition": "Release",
@@ -59,59 +35,11 @@
   },
   {
     "API": 0,
-    "hash": "5485a2f3c19cf74cf5f63c8b21feeccb",
-    "version": 11250820,
-    "edition": "Preview",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V11250820-Preview/MIDI-MCSTRUCTURE_NEXT_V11250820-Preview.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V11250820-Preview"
-  },
-  {
-    "API": 0,
-    "hash": "eb672c8f9428479a1968832c4c80edf8",
-    "version": 11250823,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V11250823-Alpha/MIDI-MCSTRUCTURE_NEXT_V11250823-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V11250823-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "443b795af94c6d0b5823b4212dbbb711",
-    "version": 11250827,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V11250827-Beta/MIDI-MCSTRUCTURE_NEXT_V11250827-Beta.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V11250827-Beta"
-  },
-  {
-    "API": 0,
     "hash": "3d45e977588b1a933fb02992a3f27139",
     "version": 11250828,
-    "edition": "ReleaseCandidate",
+    "edition": "Release",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V11250828-RC/MIDI-MCSTRUCTURE_NEXT_V11250828-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V11250828-RC"
-  },
-  {
-    "API": 0,
-    "hash": "0dd28e8e19251cf838a6f65e53257ee1",
-    "version": 12250919,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V12250919-Alpha/MIDI-MCSTRUCTURE_NEXT_V12250919-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V12250919-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "28220dd51caa57e8baa17c148da0a26c",
-    "version": 12250920,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V12250920-Beta/MIDI-MCSTRUCTURE_NEXT_V12250920-Beta.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V12250920-Beta"
-  },
-  {
-    "API": 0,
-    "hash": "6bf1820dd835771cf66998801360fdaa",
-    "version": 12250921,
-    "edition": "ReleaseCandidate",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V12250921-RC/MIDI-MCSTRUCTURE_NEXT_V12250921-RC.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V12250921-RC"
   },
   {
     "API": 0,
@@ -123,217 +51,49 @@
   },
   {
     "API": 0,
-    "hash": "9349f51a1ad47999bd13c6252ba459c8",
-    "version": 13251001,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V13251001-Alpha/MIDI-MCSTRUCTURE_NEXT_V13251001-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V13251001-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "59ae40d2f478baf30c04eb8ae59ce02e",
-    "version": 13251003,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V13251003-Beta/MIDI-MCSTRUCTURE_NEXT_V13251003-Beta.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V13251003-Beta"
-  },
-  {
-    "API": 0,
     "hash": "453e433ff2ae1ea7a46905ed8c115f0a",
     "version": 13251004,
-    "edition": "ReleaseCandidate",
+    "edition": "Release",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V13251004-RC/MIDI-MCSTRUCTURE_NEXT_V13251004-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V13251004-RC"
   },
   {
     "API": 0,
-    "hash": "4f1999f2077bc5b56e9ed75c9370ba16",
-    "version": 14251005,
-    "edition": "Preview",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V14251005-Alpha/MIDI-MCSTRUCTURE_NEXT_V14251005-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251005-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "518b0ab29bfb17537991741f0cbd367a",
-    "version": 14251006,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V14251006-Alpha/MIDI-MCSTRUCTURE_NEXT_V14251006-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251006-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "9eeaaa72b99026c3ed116120ef4fe112",
-    "version": 14251007,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V14251007-Beta/MIDI-MCSTRUCTURE_NEXT_V14251007-Beta.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251007-Beta"
-  },
-  {
-    "API": 0,
     "hash": "44a67adbe08bd9da4fe8f4842c9c4c5b",
     "version": 14251008,
-    "edition": "ReleaseCandidate",
+    "edition": "Release",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V14251008-RC/MIDI-MCSTRUCTURE_NEXT_V14251008-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V14251008-RC"
   },
   {
     "API": 0,
-    "hash": "a42bc09ce49415f1909bfcdcf958dbfb",
-    "version": 15251101,
-    "edition": "Preview",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V15251101-Preview/MIDI-MCSTRUCTURE_NEXT_V15251101-Preview.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V15251101-Preview"
-  },
-  {
-    "API": 0,
-    "hash": "b0dd2b6f11836012c73b437daa05b435",
-    "version": 15251129,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V15251129-Alpha/MIDI-MCSTRUCTURE_NEXT_V15251129-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V15251129-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "ee022ac005920632d55bcd01209c0481",
-    "version": 15251130,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V15251130-Beta/MIDI-MCSTRUCTURE_NEXT_V15251130-Beta.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V15251130-Beta"
-  },
-  {
-    "API": 0,
-    "hash": "2303e560ebc751f63bcef27b96767efd",
-    "version": 16251213,
-    "edition": "Preview",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V16251213-Preview/MIDI-MCSTRUCTURE_NEXT_V16251213-Preview.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V16251213-Preview"
-  },
-  {
-    "API": 0,
-    "hash": "4f26f518c6ecc6dd64da20f1290764d5",
-    "version": 16251214,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V16251214-Alpha/MIDI-MCSTRUCTURE_NEXT_V16251214-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V16251214-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "697eafb8319d2a6e0610f66eaf670dc3",
-    "version": 16251220,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V16251220-Beta/MIDI-MCSTRUCTURE_NEXT_V16251220-Beta.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V16251220-Beta"
-  },
-  {
-    "API": 0,
     "hash": "e6b9db098a3404e6d81b7b33dd82f53c",
     "version": 16251221,
-    "edition": "ReleaseCandidate",
+    "edition": "Release",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V16251221-RC/MIDI-MCSTRUCTURE_NEXT_V16251221-RC.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V16251221-RC"
   },
   {
     "API": 0,
-    "hash": "d88406a82ef08cf08cb6064298eaa261",
-    "version": 17251222,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/MIDI-MCSTRUCTURE_NEXT_V17251222-Alpha.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251222-Alpha"
-  },
-  {
-    "API": 3,
-    "tips": "\u5411\u4e0b\u964d\u7ea7\u9700\u8981\u5148\u5b89\u88c5\u8be5\u7248\u672c\uff01",
-    "version": 17251222,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/MIDI-MCSTRUCTURE_NEXT_V17251222-Alpha.tar.zst",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251222-Alpha"
-  },
-  {
-    "API": 0,
-    "hash": "c6ced07749d949bda941073e3bc1c8d8",
-    "version": 17251228,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251228-Beta/MIDI-MCSTRUCTURE_NEXT_V17251228-Beta.7z",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251228-Beta"
-  },
-  {
-    "API": 0,
     "hash": "e61c2b794b22bf1d2fa653a4cb691e9e",
     "version": 17260117,
-    "edition": "Patch",
+    "edition": "Release",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17260117-Patch/MIDI-MCSTRUCTURE_NEXT_V17260117-Patch.7z",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17260117-Patch"
   },
   {
     "API": 3,
-    "tips": "\u4f18\u5316MIDI\u884c\u4e3a\u5305\u751f\u6210\u529f\u80fd",
-    "version": 17251228,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251228-Beta/MIDI-MCSTRUCTURE_NEXT_V17251228-Beta.tar.zst",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17251228-Beta"
-  },
-  {
-    "API": 3,
-    "tips": "\u4f18\u5316UI\u4ea4\u4e92\u5e76\u4fee\u590d\u4e86\u4e00\u4e9b\u95ee\u9898",
-    "version": 17260101,
-    "edition": "Prerelease",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17260101-Prerelease/MIDI-MCSTRUCTURE_NEXT_V17260101-Prerelease.tar.zst",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17260101-Prerelease"
-  },
-  {
-    "API": 3,
-    "tips": "\u4f18\u5316UI\u4ea4\u4e92\n\u4fee\u590d\u6b4c\u8bcd\u51fa\u73b0\u7a7a\u884c\u7684\u95ee\u9898",
-    "version": 17260102,
-    "edition": "Release",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17260102-Release/MIDI-MCSTRUCTURE_NEXT_V17260102-Release.tar.zst",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17260102-Release"
-  },
-  {
-    "API": 3,
     "tips": "1. \u4fee\u590d\u914d\u7f6e\u6587\u4ef6\u8bed\u6cd5\u95ee\u9898\n2. \u4fee\u590d\u64ad\u653e\u901f\u5ea6\u53ef\u4ee5\u8bbe\u4e3a\u96f6\u7684\u95ee\u9898",
     "version": 17260117,
-    "edition": "Patch",
+    "edition": "Release",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17260117-Patch/MIDI-MCSTRUCTURE_NEXT_V17260117-Patch.tar.zst",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V17260117-Patch"
   },
   {
     "API": 3,
-    "tips": "\u6dfb\u52a0\u65f6\u95f4\u5bf9\u9f50\u529f\u80fd",
-    "version": 18260131,
-    "edition": "Alpha",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260131-Alpha/MIDI-MCSTRUCTURE_NEXT_V18260131-Alpha.tar.zst",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260131-Alpha"
-  },
-  {
-    "API": 3,
-    "tips": "\u4f18\u5316\u4f53\u79ef\n\u91cd\u6784\u4ee3\u7801\n\u652f\u6301\u5355\u6587\u4ef6\u7a0b\u5e8f",
-    "version": 18260201,
-    "edition": "Beta",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260201-Beta/MIDI-MCSTRUCTURE_NEXT_V18260201-Beta.tar.zst",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260201-Beta"
-  },
-  {
-    "API": 3,
-    "tips": "\u56de\u9000\u5355\u6587\u4ef6\u7279\u6027\n\u52a0\u5165\u538b\u7f29\u7b49\u7ea7\u8c03\u6574\n\u4f18\u5316\u4ee3\u7801",
-    "version": 18260210,
-    "edition": "Beta2",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260210-Beta2/MIDI-MCSTRUCTURE_NEXT_V18260210-Beta2.tar.zst",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260210-Beta2"
-  },
-  {
-    "API": 3,
-    "tips": "\u52a0\u5165\u97f3\u4e50\u9884\u89c8\u529f\u80fd",
-    "version": 18260211,
-    "edition": "Beta3",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260211-Beta3/MIDI-MCSTRUCTURE_NEXT_V18260211-Beta3.tar.zst",
-    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260211-Beta3"
-  },
-  {
-    "API": 3,
     "tips": "\u4fee\u590d\u4e00\u4e9b\u95ee\u9898",
     "version": 18260212,
-    "edition": "RC",
+    "edition": "Prerelease",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260212-RC/MIDI-MCSTRUCTURE_NEXT_V18260212-RC.tar.zst",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260212-RC"
   }
