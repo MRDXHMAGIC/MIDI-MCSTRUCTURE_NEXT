@@ -11,11 +11,6 @@
     "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V10251226-Release/MMS-ProfileEditor.7z"
   },
   {
-    "API": 2,
-    "hash": "4b114cbbe3d4242b775dfc38c4821e40",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/Player_Extension.7z"
-  },
-  {
     "API": 4,
     "version": 10251226,
     "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V10251226-Release/ProfileEditor.tar.zst"
@@ -23,7 +18,7 @@
   {
     "API": 5,
     "hash": "175440cb9c51889c025f9f71421642c5",
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V17251222-Alpha/Player_Extension.tar.zst"
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260213-Release/extension.tar.zst"
   },
   {
     "API": 0,
