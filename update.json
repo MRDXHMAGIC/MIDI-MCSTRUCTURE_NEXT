@@ -1,8 +1,8 @@
 [
   {
     "API": 6,
-    "version": 0,
-    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260212-RC/sounds.tar.zst"
+    "version": 1,
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260213-Release/sounds.tar.zst"
   },
   {
     "API": 1,
@@ -96,5 +96,13 @@
     "edition": "Prerelease",
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260212-RC/MIDI-MCSTRUCTURE_NEXT_V18260212-RC.tar.zst",
     "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260212-RC"
+  },
+  {
+    "API": 3,
+    "tips": "\u4fee\u590d\u4e0b\u8f7d\u5931\u8d25\u754c\u9762\u4e0d\u4f1a\u81ea\u52a8\u9000\u51fa\u7684\u95ee\u9898\n\u4fee\u590d\u6a21\u677f\u6307\u4ee4\u5904\u7406\u9519\u8bef\u7684\u95ee\u9898\n\u5f03\u7528\u97f3\u8c03\u5bf9\u7167\u8868",
+    "version": 18260213,
+    "edition": "Release",
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V18260213-Release/MIDI-MCSTRUCTURE_NEXT_V18260213-Release.tar.zst",
+    "description_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/tag/V18260213-Release"
   }
 ]

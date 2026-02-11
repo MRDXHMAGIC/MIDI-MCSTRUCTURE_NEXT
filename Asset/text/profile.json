@@ -1,107 +1,80 @@
 {
-  "note_list": [
-    0.074, 0.0787, 0.083,
-    0.088, 0.094, 0.1, 0.105, 0.11, 0.12, 0.125, 0.13, 0.14, 0.15, 0.16, 0.17,
-    0.18, 0.19, 0.2, 0.21, 0.22, 0.235, 0.25, 0.26, 0.28, 0.3, 0.31, 0.33,
-    0.35, 0.37, 0.4, 0.42, 0.44, 0.47, 0.5, 0.53, 0.56, 0.6, 0.63, 0.67,
-    0.7, 0.75, 0.8, 0.84, 0.9, 0.94, 1.0, 1.05, 1.12, 1.2, 1.25, 1.33,
-    1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.24, 2.4, 2.5, 2.67,
-    2.83, 3.0, 3.17, 3.36, 3.56, 3.78, 4.0, 4.24, 4.5, 4.76, 5.04, 5.34,
-    5.66, 6.0, 6.35, 6.73, 7.13, 7.55, 8.0, 8.47, 8.98, 9.51, 10.08, 10.68,
-    11.31
-  ],
   "midi_preview": {
     "sound_list": {
       "harp": [
-        ["harp", 0.53, 1.0, 0]
+        ["harp", 0.53, 0, 0]
       ],
       "pling": [
-        ["pling", 0.4, 1.0, 0]
+        ["pling", 0.4, 0, 0]
       ],
       "bit": [
-        ["bit", 1.2, 1.0, 0]
-      ],
-      "rain": [
-        ["rain", 1.0, 1.0, 0]
+        ["bit", 1.2, 0, 0]
       ],
       "xylophone": [
-        ["xylophone", 0.9, 1.0, 0]
+        ["xylophone", 0.9, 0, 0]
       ],
       "iron_xylophone": [
-        ["iron_xylophone", 0.86, 1.0, 0]
+        ["iron_xylophone", 0.86, 0, 0]
       ],
       "banjo": [
-        ["banjo", 0.8, 1, 0]
+        ["banjo", 0.8, 0, 0]
       ],
       "flute": [
-        ["flute", 0.8, 1.0, 0]
+        ["flute", 0.8, 0, 0]
       ],
       "chime": [
-        ["chime", 1.0, 1.0, 0]
+        ["chime", 1.0, 0, 0]
       ],
       "bass": [
-        ["bass", 1.0, 1.0, 0]
+        ["bass", 1.0, 0, 0]
       ],
       "guitar": [
-        ["guitar", 1.0, 1.0, 0]
+        ["guitar", 1.0, 0, 0]
       ],
       "bell": [
-        ["bell", 3.0, 1.0, 0]
+        ["bell", 3.0, 0, 0]
       ],
       "cow_bell": [
-        ["cow_bell", 0.68, 1.0, 0]
+        ["cow_bell", 0.68, 0, 0]
       ],
       "hat": [
-        ["hat", 1.0, 1.0, 0]
+        ["hat", 1.0, 0, 0]
       ],
       "snare": [
-        ["snare", 1.0, 1.0, 0]
+        ["snare", 1.0, 0, 0]
       ],
       "base_drum": [
-        ["basedrum", 1.5, 1.0, 0]
+        ["basedrum", 1.5, 0, 0]
       ],
       "cymbal": [
-        ["sand", 1.0, 3.0, 0]
+        ["sand", 1.0, 19, 0]
       ],
       "open_cymbal": [
-        ["sand", 1.5, 3.0, 0]
+        ["sand", 1.5, 19, 0]
       ],
       "pedal_cymbal": [
-        ["sand", 1.5, 6.0, 0]
+        ["sand", 1.5, 31, 0]
       ],
       "closed_cymbal": [
-        ["sand", 1.5, 9.0, 0]
+        ["sand", 1.5, 38, 0]
       ],
       "cabasa": [
-        ["sand", 1.2, 3.0, 0]
+        ["sand", 1.2, 19, 0]
       ],
       "shaker": [
-        ["sand", 1.2, 6.0, 0]
-      ],
-      "parrot": [
-        ["parrot", 1.0, 1.0, 0]
+        ["sand", 1.2, 31, 0]
       ],
       "telephone_ring": [
-        ["bit", 2.0, 1.0, 0],
-        ["bit", 2.0, 0.5, 50],
-        ["bit", 2.0, 1.0, 50],
-        ["bit", 2.0, 0.5, 50],
-        ["bit", 2.0, 1.0, 50],
-        ["bit", 2.0, 0.5, 50],
-        ["bit", 2.0, 1.0, 50],
-        ["bit", 2.0, 0.5, 50]
+        ["bit", 2.0, 6, 0],
+        ["bit", 2.0, -6, 50],
+        ["bit", 2.0, 6, 50],
+        ["bit", 2.0, -6, 50],
+        ["bit", 2.0, 6, 50],
+        ["bit", 2.0, -6, 50],
+        ["bit", 2.0, 6, 50],
+        ["bit", 2.0, -6, 50]
       ],
-      "helicopter": [
-        ["breeze_idle_ground", 0.5, 1.0, 0],
-        ["breeze_death", 0.5, 1.0, 0],
-        ["breeze_death", 0.5, 1.0, 100],
-        ["breeze_death", 0.5, 1.0, 100],
-        ["breeze_death", 0.5, 1.0, 100],
-        ["breeze_death", 0.5, 1.0, 100],
-        ["breeze_death", 0.5, 1.0, 100],
-        ["breeze_death", 0.5, 1.0, 100],
-        ["breeze_death", 0.5, 1.0, 100]
-      ]
+      "helicopter": null
     }
   },
   "new_bedrock": {
@@ -135,94 +108,94 @@
     },
     "sound_list": {
       "harp": [
-        ["note.harp", 0.53, 1.0, 0]
+        ["note.harp", 0.53, 0, 0]
       ],
       "pling": [
-        ["note.pling", 0.4, 1.0, 0]
+        ["note.pling", 0.4, 0, 0]
       ],
       "bit": [
-        ["note.bit", 1.2, 1.0, 0]
+        ["note.bit", 1.2, 0, 0]
       ],
       "rain": [
-        ["ambient.weather.rain", 1.0, 1.0, 0]
+        ["ambient.weather.rain", 1.0, 0, 0]
       ],
       "xylophone": [
-        ["note.xylophone", 0.9, 1.0, 0]
+        ["note.xylophone", 0.9, 0, 0]
       ],
       "iron_xylophone": [
-        ["note.iron_xylophone", 0.86, 1.0, 0]
+        ["note.iron_xylophone", 0.86, 0, 0]
       ],
       "banjo": [
-        ["note.banjo", 0.8, 1, 0]
+        ["note.banjo", 0.8, 0, 0]
       ],
       "flute": [
-        ["note.flute", 0.8, 1.0, 0]
+        ["note.flute", 0.8, 0, 0]
       ],
       "chime": [
-        ["note.chime", 1.0, 1.0, 0]
+        ["note.chime", 1.0, 0, 0]
       ],
       "bass": [
-        ["note.bass", 1.0, 1.0, 0]
+        ["note.bass", 1.0, 0, 0]
       ],
       "guitar": [
-        ["note.guitar", 1.0, 1.0, 0]
+        ["note.guitar", 1.0, 0, 0]
       ],
       "bell": [
-        ["note.bell", 3.0, 1.0, 0]
+        ["note.bell", 3.0, 0, 0]
       ],
       "cow_bell": [
-        ["note.cow_bell", 0.68, 1.0, 0]
+        ["note.cow_bell", 0.68, 0, 0]
       ],
       "hat": [
-        ["note.hat", 1.0, 1.0, 0]
+        ["note.hat", 1.0, 0, 0]
       ],
       "snare": [
-        ["note.snare", 1.0, 1.0, 0]
+        ["note.snare", 1.0, 0, 0]
       ],
       "base_drum": [
-        ["note.bd", 1.5, 1.0, 0]
+        ["note.bd", 1.5, 0, 0]
       ],
       "cymbal": [
-        ["random.fizz", 1.0, 3.0, 0]
+        ["random.fizz", 1.0, 19, 0]
       ],
       "open_cymbal": [
-        ["random.fizz", 1.5, 3.0, 0]
+        ["random.fizz", 1.5, 19, 0]
       ],
       "pedal_cymbal": [
-        ["random.fizz", 1.5, 6.0, 0]
+        ["random.fizz", 1.5, 31, 0]
       ],
       "closed_cymbal": [
-        ["random.fizz", 1.5, 9.0, 0]
+        ["random.fizz", 1.5, 38, 0]
       ],
       "cabasa": [
-        ["random.fizz", 1.2, 3.0, 0]
+        ["random.fizz", 1.2, 19, 0]
       ],
       "shaker": [
-        ["random.fizz", 1.2, 6.0, 0]
+        ["random.fizz", 1.2, 31, 0]
       ],
       "parrot": [
-        ["mob.parrot.idle", 1.0, 1.0, 0]
+        ["mob.parrot.idle", 1.0, 0, 0]
       ],
       "telephone_ring": [
-        ["note.bit", 2.0, 1.0, 0],
-        ["note.bit", 2.0, 0.5, 50],
-        ["note.bit", 2.0, 1.0, 50],
-        ["note.bit", 2.0, 0.5, 50],
-        ["note.bit", 2.0, 1.0, 50],
-        ["note.bit", 2.0, 0.5, 50],
-        ["note.bit", 2.0, 1.0, 50],
-        ["note.bit", 2.0, 0.5, 50]
+        ["note.bit", 2.0, 6, 0],
+        ["note.bit", 2.0, -6, 50],
+        ["note.bit", 2.0, 6, 50],
+        ["note.bit", 2.0, -6, 50],
+        ["note.bit", 2.0, 6, 50],
+        ["note.bit", 2.0, -6, 50],
+        ["note.bit", 2.0, 6, 50],
+        ["note.bit", 2.0, -6, 50]
       ],
       "helicopter": [
-        ["mob.breeze.idle_ground", 0.5, 1.0, 0],
-        ["mob.breeze.death", 0.5, 1.0, 0],
-        ["mob.breeze.death", 0.5, 1.0, 100],
-        ["mob.breeze.death", 0.5, 1.0, 100],
-        ["mob.breeze.death", 0.5, 1.0, 100],
-        ["mob.breeze.death", 0.5, 1.0, 100],
-        ["mob.breeze.death", 0.5, 1.0, 100],
-        ["mob.breeze.death", 0.5, 1.0, 100],
-        ["mob.breeze.death", 0.5, 1.0, 100]
+        ["mob.breeze.idle_ground", 0.5, 0, 0],
+        ["mob.breeze.death", 0.5, 0, 0],
+        ["mob.breeze.death", 0.5, 0, 100],
+        ["mob.breeze.death", 0.5, 0, 100],
+        ["mob.breeze.death", 0.5, 0, 100],
+        ["mob.breeze.death", 0.5, 0, 100],
+        ["mob.breeze.death", 0.5, 0, 100],
+        ["mob.breeze.death", 0.5, 0, 100],
+        ["mob.breeze.death", 0.5, 0, 100]
       ]
     }
   },
@@ -257,94 +230,94 @@
     },
     "sound_list": {
       "harp": [
-        ["block.note_block.harp", 0.53, 1.0, 0]
+        ["block.note_block.harp", 0.53, 0, 0]
       ],
       "pling": [
-        ["block.note_block.pling", 0.4, 1.0, 0]
+        ["block.note_block.pling", 0.4, 0, 0]
       ],
       "bit": [
-        ["block.note_block.bit", 1.2, 1.0, 0]
+        ["block.note_block.bit", 1.2, 0, 0]
       ],
       "rain": [
-        ["weather.rain", 1.0, 1.0, 0]
+        ["weather.rain", 1.0, 0, 0]
       ],
       "xylophone": [
-        ["block.note_block.xylophone", 0.9, 1.0, 0]
+        ["block.note_block.xylophone", 0.9, 0, 0]
       ],
       "iron_xylophone": [
-        ["block.note_block.iron_xylophone", 0.86, 1.0, 0]
+        ["block.note_block.iron_xylophone", 0.86, 0, 0]
       ],
       "banjo": [
-        ["block.note_block.banjo", 0.8, 1, 0]
+        ["block.note_block.banjo", 0.8, 0, 0]
       ],
       "flute": [
-        ["block.note_block.flute", 0.8, 1.0, 0]
+        ["block.note_block.flute", 0.8, 0, 0]
       ],
       "chime": [
-        ["block.note_block.chime", 1.0, 1.0, 0]
+        ["block.note_block.chime", 1.0, 0, 0]
       ],
       "bass": [
-        ["block.note_block.bass", 1.0, 1.0, 0]
+        ["block.note_block.bass", 1.0, 0, 0]
       ],
       "guitar": [
-        ["block.note_block.guitar", 1.0, 1.0, 0]
+        ["block.note_block.guitar", 1.0, 0, 0]
       ],
       "bell": [
-        ["block.note_block.bell", 3.0, 1.0, 0]
+        ["block.note_block.bell", 3.0, 0, 0]
       ],
       "cow_bell": [
-        ["block.note_block.cow_bell", 0.68, 1.0, 0]
+        ["block.note_block.cow_bell", 0.68, 0, 0]
       ],
       "hat": [
-        ["block.note_block.hat", 1.0, 1.0, 0]
+        ["block.note_block.hat", 1.0, 0, 0]
       ],
       "snare": [
-        ["block.note_block.snare", 1.0, 1.0, 0]
+        ["block.note_block.snare", 1.0, 0, 0]
       ],
       "base_drum": [
-        ["block.note_block.basedrum", 1.5, 1.0, 0]
+        ["block.note_block.basedrum", 1.5, 0, 0]
       ],
       "cymbal": [
-        ["block.fire.extinguish", 1.0, 3.0, 0]
+        ["block.fire.extinguish", 1.0, 19, 0]
       ],
       "open_cymbal": [
-        ["block.fire.extinguish", 1.5, 3.0, 0]
+        ["block.fire.extinguish", 1.5, 19, 0]
       ],
       "pedal_cymbal": [
-        ["block.fire.extinguish", 1.5, 6.0, 0]
+        ["block.fire.extinguish", 1.5, 31, 0]
       ],
       "closed_cymbal": [
-        ["block.fire.extinguish", 1.5, 9.0, 0]
+        ["block.fire.extinguish", 1.5, 38, 0]
       ],
       "cabasa": [
-        ["block.fire.extinguish", 1.2, 3.0, 0]
+        ["block.fire.extinguish", 1.2, 19, 0]
       ],
       "shaker": [
-        ["block.fire.extinguish", 1.2, 6.0, 0]
+        ["block.fire.extinguish", 1.2, 31, 0]
       ],
       "parrot": [
-        ["entity.parrot.ambient", 1.0, 1.0, 0]
+        ["entity.parrot.ambient", 1.0, 0, 0]
       ],
       "telephone_ring": [
-        ["block.note_block.bit", 2.0, 1.0, 0],
-        ["block.note_block.bit", 2.0, 0.5, 50],
-        ["block.note_block.bit", 2.0, 1.0, 50],
-        ["block.note_block.bit", 2.0, 0.5, 50],
-        ["block.note_block.bit", 2.0, 1.0, 50],
-        ["block.note_block.bit", 2.0, 0.5, 50],
-        ["block.note_block.bit", 2.0, 1.0, 50],
-        ["block.note_block.bit", 2.0, 0.5, 50]
+        ["block.note_block.bit", 2.0, 6, 0],
+        ["block.note_block.bit", 2.0, -6, 50],
+        ["block.note_block.bit", 2.0, 6, 50],
+        ["block.note_block.bit", 2.0, -6, 50],
+        ["block.note_block.bit", 2.0, 6, 50],
+        ["block.note_block.bit", 2.0, -6, 50],
+        ["block.note_block.bit", 2.0, 6, 50],
+        ["block.note_block.bit", 2.0, -6, 50]
       ],
       "helicopter": [
-        ["entity.breeze.idle_ground", 0.5, 1.0, 0],
-        ["entity.breeze.death", 0.5, 1.0, 0],
-        ["entity.breeze.death", 0.5, 1.0, 100],
-        ["entity.breeze.death", 0.5, 1.0, 100],
-        ["entity.breeze.death", 0.5, 1.0, 100],
-        ["entity.breeze.death", 0.5, 1.0, 100],
-        ["entity.breeze.death", 0.5, 1.0, 100],
-        ["entity.breeze.death", 0.5, 1.0, 100],
-        ["entity.breeze.death", 0.5, 1.0, 100]
+        ["entity.breeze.idle_ground", 0.5, 0, 0],
+        ["entity.breeze.death", 0.5, 0, 0],
+        ["entity.breeze.death", 0.5, 0, 100],
+        ["entity.breeze.death", 0.5, 0, 100],
+        ["entity.breeze.death", 0.5, 0, 100],
+        ["entity.breeze.death", 0.5, 0, 100],
+        ["entity.breeze.death", 0.5, 0, 100],
+        ["entity.breeze.death", 0.5, 0, 100],
+        ["entity.breeze.death", 0.5, 0, 100]
       ]
     }
   },
@@ -379,83 +352,83 @@
     },
     "sound_list": {
       "harp": [
-        ["note.harp", 0.53, 1.0, 0]
+        ["note.harp", 0.53, 0, 0]
       ],
       "pling": [
-        ["note.pling", 0.4, 1.0, 0]
+        ["note.pling", 0.4, 0, 0]
       ],
       "bit": [
-        ["note.bit", 1.2, 1.0, 0]
+        ["note.bit", 1.2, 0, 0]
       ],
       "rain": [
-        ["ambient.weather.rain", 1.0, 1.0, 0]
+        ["ambient.weather.rain", 1.0, 0, 0]
       ],
       "xylophone": [
-        ["note.xylophone", 0.9, 1.0, 0]
+        ["note.xylophone", 0.9, 0, 0]
       ],
       "iron_xylophone": [
-        ["note.iron_xylophone", 0.86, 1.0, 0]
+        ["note.iron_xylophone", 0.86, 0, 0]
       ],
       "banjo": [
-        ["note.banjo", 0.8, 1, 0]
+        ["note.banjo", 0.8, 0, 0]
       ],
       "flute": [
-        ["note.flute", 0.8, 1.0, 0]
+        ["note.flute", 0.8, 0, 0]
       ],
       "chime": [
-        ["note.chime", 1.0, 1.0, 0]
+        ["note.chime", 1.0, 0, 0]
       ],
       "bass": [
-        ["note.bass", 1.0, 1.0, 0]
+        ["note.bass", 1.0, 0, 0]
       ],
       "guitar": [
-        ["note.guitar", 1.0, 1.0, 0]
+        ["note.guitar", 1.0, 0, 0]
       ],
       "bell": [
-        ["note.bell", 3.0, 1.0, 0]
+        ["note.bell", 3.0, 0, 0]
       ],
       "cow_bell": [
-        ["note.cow_bell", 0.68, 1.0, 0]
+        ["note.cow_bell", 0.68, 0, 0]
       ],
       "hat": [
-        ["note.hat", 1.0, 1.0, 0]
+        ["note.hat", 1.0, 0, 0]
       ],
       "snare": [
-        ["note.snare", 1.0, 1.0, 0]
+        ["note.snare", 1.0, 0, 0]
       ],
       "base_drum": [
-        ["note.bd", 1.5, 1.0, 0]
+        ["note.bd", 1.5, 0, 0]
       ],
       "cymbal": [
-        ["random.fizz", 1.0, 3.0, 0]
+        ["random.fizz", 1.0, 19, 0]
       ],
       "open_cymbal": [
-        ["random.fizz", 1.5, 3.0, 0]
+        ["random.fizz", 1.5, 19, 0]
       ],
       "pedal_cymbal": [
-        ["random.fizz", 1.5, 6.0, 0]
+        ["random.fizz", 1.5, 31, 0]
       ],
       "closed_cymbal": [
-        ["random.fizz", 1.5, 9.0, 0]
+        ["random.fizz", 1.5, 38, 0]
       ],
       "cabasa": [
-        ["random.fizz", 1.2, 3.0, 0]
+        ["random.fizz", 1.2, 19, 0]
       ],
       "shaker": [
-        ["random.fizz", 1.2, 6.0, 0]
+        ["random.fizz", 1.2, 31, 0]
       ],
       "parrot": [
-        ["mob.parrot.idle", 1.0, 1.0, 0]
+        ["mob.parrot.idle", 1.0, 0, 0]
       ],
       "telephone_ring": [
-        ["note.bit", 2.0, 1.0, 0],
-        ["note.bit", 2.0, 0.5, 50],
-        ["note.bit", 2.0, 1.0, 50],
-        ["note.bit", 2.0, 0.5, 50],
-        ["note.bit", 2.0, 1.0, 50],
-        ["note.bit", 2.0, 0.5, 50],
-        ["note.bit", 2.0, 1.0, 50],
-        ["note.bit", 2.0, 0.5, 50]
+        ["note.bit", 2.0, 6, 0],
+        ["note.bit", 2.0, -6, 50],
+        ["note.bit", 2.0, 6, 50],
+        ["note.bit", 2.0, -6, 50],
+        ["note.bit", 2.0, 6, 50],
+        ["note.bit", 2.0, -6, 50],
+        ["note.bit", 2.0, 6, 50],
+        ["note.bit", 2.0, -6, 50]
       ]
     }
   },
@@ -490,68 +463,68 @@
     },
     "sound_list": {
       "harp": [
-        ["block.note.harp", 0.53, 1.0, 0]
+        ["block.note.harp", 0.53, 0, 0]
       ],
       "pling": [
-        ["block.note.pling", 0.4, 1.0, 0]
+        ["block.note.pling", 0.4, 0, 0]
       ],
       "rain": [
-        ["weather.rain", 1.0, 1.0, 0]
+        ["weather.rain", 1.0, 0, 0]
       ],
       "xylophone": [
-        ["block.note.xylophone", 0.9, 1.0, 0]
+        ["block.note.xylophone", 0.9, 0, 0]
       ],
       "flute": [
-        ["block.note.flute", 0.8, 1.0, 0]
+        ["block.note.flute", 0.8, 0, 0]
       ],
       "bass": [
-        ["block.note.bass", 1.0, 1.0, 0]
+        ["block.note.bass", 1.0, 0, 0]
       ],
       "guitar": [
-        ["block.note.guitar", 1.0, 1.0, 0]
+        ["block.note.guitar", 1.0, 0, 0]
       ],
       "bell": [
-        ["block.note.bell", 3.0, 1.0, 0]
+        ["block.note.bell", 3.0, 0, 0]
       ],
       "hat": [
-        ["block.note.hat", 1.0, 1.0, 0]
+        ["block.note.hat", 1.0, 0, 0]
       ],
       "snare": [
-        ["block.note.snare", 1.0, 1.0, 0]
+        ["block.note.snare", 1.0, 0, 0]
       ],
       "base_drum": [
-        ["block.note.basedrum", 1.5, 1.0, 0]
+        ["block.note.basedrum", 1.5, 0, 0]
       ],
       "cymbal": [
-        ["block.fire.extinguish", 1.0, 3.0, 0]
+        ["block.fire.extinguish", 1.0, 19, 0]
       ],
       "open_cymbal": [
-        ["block.fire.extinguish", 1.5, 3.0, 0]
+        ["block.fire.extinguish", 1.5, 19, 0]
       ],
       "pedal_cymbal": [
-        ["block.fire.extinguish", 1.5, 6.0, 0]
+        ["block.fire.extinguish", 1.5, 31, 0]
       ],
       "closed_cymbal": [
-        ["block.fire.extinguish", 1.5, 9.0, 0]
+        ["block.fire.extinguish", 1.5, 38, 0]
       ],
       "cabasa": [
-        ["block.fire.extinguish", 1.2, 3.0, 0]
+        ["block.fire.extinguish", 1.2, 19, 0]
       ],
       "shaker": [
-        ["block.fire.extinguish", 1.2, 6.0, 0]
+        ["block.fire.extinguish", 1.2, 31, 0]
       ],
       "parrot": [
-        ["entity.parrot.ambient", 1.0, 1.0, 0]
+        ["entity.parrot.ambient", 1.0, 0, 0]
       ],
       "telephone_ring": [
-        ["block.note.harp", 2.0, 1.0, 0],
-        ["block.note.harp", 2.0, 0.5, 50],
-        ["block.note.harp", 2.0, 1.0, 50],
-        ["block.note.harp", 2.0, 0.5, 50],
-        ["block.note.harp", 2.0, 1.0, 50],
-        ["block.note.harp", 2.0, 0.5, 50],
-        ["block.note.harp", 2.0, 1.0, 50],
-        ["block.note.harp", 2.0, 0.5, 50]
+        ["block.note.harp", 2.0, 6, 0],
+        ["block.note.harp", 2.0, -6, 50],
+        ["block.note.harp", 2.0, 6, 50],
+        ["block.note.harp", 2.0, -6, 50],
+        ["block.note.harp", 2.0, 6, 50],
+        ["block.note.harp", 2.0, -6, 50],
+        ["block.note.harp", 2.0, 6, 50],
+        ["block.note.harp", 2.0, -6, 50]
       ]
     }
   }

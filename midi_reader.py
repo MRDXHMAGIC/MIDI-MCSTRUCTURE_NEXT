@@ -199,10 +199,10 @@ class MIDIReader:
                     # 一般音符用于表示音调，打击乐器（第十轨道上的音符）用于表示音色
                     if _channel == 9:
                         # 打击乐器保持原声
-                        _note_pitch = 45
+                        _note_pitch = 66
                         _note_program = _mapping.get(_message.note, _message.note)
                     else:
-                        _note_pitch = _message.note - 21
+                        _note_pitch = _message.note
                         _note_program = _channel_info[_channel]["program"].match_info(_time)
                     # 打包数据
                     _data = {

@@ -371,7 +371,7 @@ def convertor(_setting, _task_id):
             _crc, _buffer = write_cmd(
                 {
                     "structure": "Asset/mcstructure/" + global_asset["structure"][_setting["structure"]],
-                    "cmd_list": cmd_convertor(_setting, _profile, _time_offset, _result),
+                    "cmd_list": ((_cmd[0], _cmd[1].replace("{ADDRESS}", "0" if _task_id is None else str(_task_id))) for _cmd in cmd_convertor(_setting, _profile, _time_offset, _result)),
                     "map": (
                         ("__ADDRESS__", "0" if _task_id is None else str(_task_id)),
                         ("__TOTAL__", str(max(_result.keys()))),
@@ -434,7 +434,7 @@ def convertor(_setting, _task_id):
 
                     shutil.copyfile(
                         "Cache/convertor/function.mcfunction",
-                        "Cache/output/data/mms/function/midi_player.mcfunction"
+                        f"Cache/output/data/mms/function/player_{time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())}.mcfunction"
                     )
 
                 else:
@@ -442,15 +442,8 @@ def convertor(_setting, _task_id):
 
                     shutil.copyfile(
                         "Cache/convertor/function.mcfunction",
-                        "Cache/output/data/mms/functions/midi_player.mcfunction"
+                        f"Cache/output/data/mms/functions/midi_player_{time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())}.mcfunction"
                     )
-
-                    _behavior_file = {
-                        "pack": {
-                            "pack_format": 23,
-                            "description": "§r§fBy §dMIDI-MCSTRUCTURE §bNEXT"
-                        }
-                    }
 
                 _behavior_file = {
                     "pack": {
@@ -589,12 +582,6 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
         elif _data["type"] == "note":
             # 去除打击乐器
             if _data["percussion"] and not _setting["percussion"]: continue
-            # 获取游戏中的音调值
-            if 0 <= _data["pitch"] < len(global_asset["profile"]["note_list"]):
-                _pitch = global_asset["profile"]["note_list"][_data["pitch"]]
-            else:
-                logger.debug("Pitch " + str(_data["pitch"]) + " Out of Range!")
-                continue
 
             # 获取游戏中的乐器名称
             if _data["percussion"]:
@@ -604,6 +591,8 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
                     _program = _profile["sound_list"][global_asset["mapping"]["default"]]
                 else:
                     _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data["program"]), global_asset["mapping"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["undefined"]])
+
+            if _program is None: continue
 
             _delay_time = 0
             # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
@@ -616,17 +605,22 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
                 _delay_time += _note[3]
 
                 # 如果启用调整音符功能，则会根据配置文件对音量和音调进行调整
-                _note_pitch = _pitch
+
+                # 获取游戏中的音调值
+                _pitch = _data["pitch"]
                 _note_velocity = _data["velocity"]
 
                 if _setting["adjustment"]:
-                    _note_pitch *= _note[2]
+                    _pitch += _note[2]
                     _note_velocity *= _note[1]
 
                 # 返回音符数据
-                yield round_int((_time + _delay_time) / _setting["time_per_tick"]), Note(_note[0], (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], _note_pitch, _data["panning"])
+                yield round_int((_time + _delay_time) / _setting["time_per_tick"]), Note(_note[0], (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], get_pitch(_pitch), _data["panning"])
         else:
             raise TypeError("Unknown Data Type: " + str(_data["type"]))
+
+def get_pitch(_index: int) -> float:
+    return 2 ** ((_index - 66) / 12)
 
 def cmd_convertor(_setting: dict, _profile: dict, _start_time: int, _result: dict[int, set[Note | Lyrics]]) -> tuple[int, str]:
     if _setting["command_type"] == 0:
@@ -1133,7 +1127,7 @@ def get_version_list():
     except:
         logger.error(traceback.format_exc())
 
-def download(_url, _state, _target_path, _callback, _extract=True):
+def download(_url, _state, _target_path, _callback):
     try:
         _state["state"] = 0
 
@@ -1148,7 +1142,7 @@ def download(_url, _state, _target_path, _callback, _extract=True):
         logger.error(traceback.format_exc())
         _state["state"] = -1
 
-        time.sleep(3000)
+        time.sleep(3)
 
         remove_page(overlay_page)
 
