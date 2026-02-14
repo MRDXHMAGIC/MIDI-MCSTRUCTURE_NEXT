@@ -74,7 +74,13 @@
         ["bit", 2.0, 6, 50],
         ["bit", 2.0, -6, 50]
       ],
-      "helicopter": null
+      "helicopter": null,
+      "didgeridoo": [
+        ["didgeridoo", 0.8, 0, 0]
+      ],
+      "trumpet": [
+        ["trumpet", 1.2, 0, 0]
+      ]
     }
   },
   "new_bedrock": {
@@ -196,6 +202,12 @@
         ["mob.breeze.death", 0.5, 0, 100],
         ["mob.breeze.death", 0.5, 0, 100],
         ["mob.breeze.death", 0.5, 0, 100]
+      ],
+      "didgeridoo": [
+        ["note.didgeridoo", 0.8, 0, 0]
+      ],
+      "trumpet": [
+        ["note.trumpet", 1.2, 0, 0]
       ]
     }
   },
@@ -318,6 +330,12 @@
         ["entity.breeze.death", 0.5, 0, 100],
         ["entity.breeze.death", 0.5, 0, 100],
         ["entity.breeze.death", 0.5, 0, 100]
+      ],
+      "didgeridoo": [
+        ["block.note_block.didgeridoo", 0.8, 0, 0]
+      ],
+      "trumpet": [
+        ["block.note_block.trumpet", 1.2, 0, 0]
       ]
     }
   },
@@ -429,6 +447,9 @@
         ["note.bit", 2.0, -6, 50],
         ["note.bit", 2.0, 6, 50],
         ["note.bit", 2.0, -6, 50]
+      ],
+      "didgeridoo": [
+        ["note.didgeridoo", 0.8, 0, 0]
       ]
     }
   },

@@ -21,49 +21,40 @@ from database import LyricsList, Note, Lyrics
 from ui_manager import UIManager
 from midi_reader import MIDIReader
 
-
-class NetStream:
-    def __init__(self, _url: str):
+class NetBuffer:
+    def __init__(self):
+        self.pos = 0
         self.size = 0
-        self.__buffer = b""
-        self.__stream = None
-        self.__position = 0
-        self.__response = requests.get(_url, stream=True)
+        self.__data = b""
+        self.__done = False
+        self.__exception = None
 
-        self.__response.raise_for_status()
+    def write(self, _data):
+        if self.__exception is not None: raise self.__exception
+        self.__data += _data
 
-        self.size = int(self.__response.headers["content-length"])
-    def __enter__(self):
-        self.__stream = self.__response.__enter__().iter_content(5120)
-        return self
-    def __exit__(self, _exc_type, _exc_val, _exc_tb):
-        self.__response.__exit__(_exc_type, _exc_val, _exc_tb)
-    def __bool__(self):
-        return True
-    def seekable(self):
-        return False
-    def readable(self):
-        return self.__stream is not None
-    def tell(self):
-        return self.__position
+    def set_done(self):
+        self.__done = True
+
+    def set_exception(self, _exception):
+        self.__exception = _exception
+
+    def get_progress(self):
+        return 0 if self.size == 0 else self.pos / self.size
+
     def read(self, _size: int = -1):
-        if _size == -1:
-            _data, self.__buffer = self.__buffer, b""
-            for _chunk in self.__stream:
-                _data += _chunk
-        else:
-            while len(self.__buffer) < _size:
-                try:
-                    self.__buffer += next(self.__stream)
-                except StopIteration:
-                    self.__stream = None
-                    break
-            _data, self.__buffer = self.__buffer[:_size], self.__buffer[_size:]
+        while (_size == -1 or len(self.__data) < _size) and not self.__done: pass
 
-        self.__position += len(_data)
+        if self.__exception is not None:
+            raise self.__exception
+        elif _size == -1:
+            _data, self.__data = self.__data, b""
+            self.pos += len(_data)
+        else:
+            _data, self.__data = self.__data[:_size], self.__data[_size:]
+            self.pos += _size
 
         return _data
-
 
 # 加载资源函数
 def asset_load() -> None:
@@ -121,7 +112,7 @@ def asset_load() -> None:
             ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
 
         logger.debug("Set Pygame Max Channels...")
-        pygame.mixer.set_num_channels(48)
+        pygame.mixer.set_num_channels(64)
 
         logger.debug("Loading Mapping Files...")
         with open("Asset/text/mapping.json", "rb") as _io:
@@ -571,9 +562,6 @@ def convertor(_setting, _task_id):
         if _setting["output_format"] != 3: remove_page(overlay_page)
 
 def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[int, Note | str]:
-    _note_buffer = {}
-    _lyrics_buffer = {}
-    _average_volume = [0, 0]
     for _time, _data in _midi_file:
         if _data["type"] == "text":
             # 返回文本数据
@@ -770,6 +758,8 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
                 if _overlay[_n][2] >= 1: _overlay[_n][2] = 1
             else:
                 _overlay[_n][2] += (-0.1 - _overlay[_n][2]) * global_info["animation_speed"]
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt
         except:
             global_info["message"].append("MMS-UI错误，请将log.txt发送给开发者以修复问题！")
             logger.error(traceback.format_exc())
@@ -913,7 +903,7 @@ def set_selector_num(_num: None | int = None) -> None:
             global_info["message"].append("单条指令内的时间项数至少为2个！")
 
 def show_download(_title: str, _url: str, _target_path, _callback=lambda: remove_page(overlay_page)):
-    _state = {"state": 0, "object": None}
+    _state = {"state": 0, "buffer": NetBuffer()}
     threading.Thread(target=download, args=(_url, _state, _target_path, _callback), daemon=True).start()
     add_page(overlay_page, [download_screen, {"state": _state, "title": _title}])
 
@@ -1017,12 +1007,12 @@ def player_callback(_path: str, _ask: bool, _info):
              },
             None
         )
-    finally:
+    except:
         _info["armed"] = True
 
 def enter_to_player(_remove: bool = True):
     if _remove: remove_page(overlay_page)
-    if os.path.exists("Cache/sounds") and os.path.exists("Cache/sounds/" + str(global_info["sounds_update"]["version"]) + ".ver"):
+    if (os.path.exists("Cache/sounds") and any(_path.endswith(".ver") for _path in os.listdir("Cache/sounds"))) and (global_info["sounds_update"]["version"] == -1 or os.path.exists("Cache/sounds/" + str(global_info["sounds_update"]["version"]) + ".ver")):
         if global_info["convertor"]["time_per_tick"] == -1:
             global_info["convertor"]["time_per_tick"] = 50
         add_page(overlay_page, [player_screen, {"button_state": [0, 0, 0, 0, 0], "file": "", "play": False, "armed": True, "length": 0, "position": 0, "lyrics": ("", "")}])
@@ -1131,20 +1121,38 @@ def download(_url, _state, _target_path, _callback):
     try:
         _state["state"] = 0
 
-        with NetStream(_url) as _net:
-            _state["object"] = _net
-            with tarfile.open(fileobj=_net, mode="r|zst") as _io:
-                _io.extractall(_target_path)
+        threading.Thread(target=downloader, args=(_url, _state["buffer"]), daemon=True).start()
+
+        with tarfile.open(fileobj=_state["buffer"], mode="r|zst") as _io:
+            _io.extractall(_target_path)
 
         _state["state"] = 1
         _callback()
-    except:
+    except Exception as _exception:
         logger.error(traceback.format_exc())
+
+        _state["buffer"].set_exception(_exception)
         _state["state"] = -1
 
         time.sleep(3)
 
         remove_page(overlay_page)
+
+def downloader(_url, _buffer: NetBuffer):
+    try:
+        _response = requests.get(_url, stream=True)
+
+        _buffer.size = int(_response.headers["content-length"])
+
+        with _response as _net:
+            for _block in _net.iter_content(5120):
+                _buffer.write(_block)
+
+    except Exception as _exception:
+        logger.error(traceback.format_exc())
+        _buffer.set_exception(_exception)
+    finally:
+        _buffer.set_done()
 
 def update_mcpack():
     try:
@@ -1225,7 +1233,7 @@ def menu_screen(_info, _input):
                     _edition = "Unknown"
                 if global_info["setting"]["edition"]:
                     _edition += "-" + str(global_info["setting"]["edition"])
-                add_page(overlay_page, [about_screen, {"edition": _edition, "button_state": [0, 0, 0]}])
+                add_page(overlay_page, [about_screen, {"edition": _edition, "button_state": [0, 0]}])
 
     change_button_alpha(_info["button_state"], _id)
 
@@ -1599,20 +1607,17 @@ def about_screen(_info, _input):
         (
             (0.025, 0.044, 0.95, 0.267, ("", 0, 0), -1),
             (0.025, 0.267, 0.95, 0, (_info["edition"], 0.035, 255), -1),
-            (0.025, 0.356, 0.95, 0.1, ("交流群(密码14890357)", 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.489, 0.95, 0.1, ("MMS-NEXT 开源仓库", 0.035, _info["button_state"][1]), 1),
-            (0.025, 0.622, 0.95, 0.1, ("MMS 开源仓库", 0.035, _info["button_state"][2]), 2)
+            (0.025, 0.356, 0.463, 0.1, ("QQ 交流群", 0.035, _info["button_state"][0]), 0),
+            (0.513, 0.356, 0.463, 0.1, ("Gitee 开源仓库", 0.035, _info["button_state"][1]), 1)
         ),
         pygame.mouse.get_pos()
     )
 
     if "mouse_left" in _input and not _input["mouse_left"]:
         if _id == 0:
-            webbrowser.open("qm.qq.com/q/9oBhTyDN8k")
+            add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["在浏览器中查看", "好的"], "argument": (), "callback": lambda: webbrowser.open("qm.qq.com/q/9oBhTyDN8k"), "content": "密码\n14890357"}], 0, True)
         elif _id == 1:
             webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure_next")
-        elif _id == 2:
-            webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure")
 
     change_button_alpha(_info["button_state"], _id)
 
@@ -1623,10 +1628,8 @@ def about_screen(_info, _input):
 def download_screen(_info, _input):
     if _info["state"]["state"] == -1:
         _text = "下载失败，请重试"
-    elif _info["state"]["object"] is None:
-        _text = "等待中"
     elif _info["state"]["state"] == 0:
-        _text = str(round_45((_info["state"]["object"].tell() / _info["state"]["object"].size) * 100, 2)) + "%" if _info["state"]["object"].size else "等待中"
+        _text = str(round_45(_info["state"]["buffer"].get_progress() * 100, 2)) + "%" if _info["state"]["buffer"].get_progress() else "等待中"
     elif _info["state"]["state"] == 1:
         _text = "下载完成"
     else:
@@ -1644,7 +1647,7 @@ def download_screen(_info, _input):
 
 def adj_mapping_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
-        add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["是", "否"], "argument": [_info["done"]], "callback": exit_mapping_screen, "content": "你是否要离开？"}], 0, True)
+        add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["是", "否"], "argument": [_info["done"]], "callback": exit_mapping_screen, "content": "退出映射编辑界面？"}], 0, True)
 
     if _info["done"][0] == 1:
         remove_page(overlay_page)
@@ -1993,7 +1996,7 @@ def asking_screen(_info, _input):
 
     return _root
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": 0, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False, "ask_mapping": True}}
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

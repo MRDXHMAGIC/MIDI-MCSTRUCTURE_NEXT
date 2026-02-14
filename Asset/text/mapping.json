@@ -68,6 +68,8 @@
   "124": "telephone_ring",
   "125": "helicopter",
   "126": "hat",
+  "613000": "didgeridoo",
+  "613001": "trumpet",
   "percussion": {
     "undefined": "cymbal",
     "31": "hat",

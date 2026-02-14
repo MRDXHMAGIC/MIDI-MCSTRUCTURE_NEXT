@@ -76,7 +76,7 @@ except:
     add_log("E", traceback.format_exc())
 finally:
     if log:
-        with open(get_path("update_log.txt"), "a", encoding="utf-8") as io:
+        with open(get_path("update_log.txt"), "w", encoding="utf-8") as io:
             io.write("[I] MMS Updater (Built at {BUILT_TIME}):\n")
             io.writelines(line + "\n" for line in log)
 
