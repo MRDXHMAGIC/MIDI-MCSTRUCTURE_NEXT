@@ -79,7 +79,7 @@
         ["didgeridoo", 0.8, 0, 0]
       ],
       "trumpet": [
-        ["trumpet", 1.2, 0, 0]
+        ["trumpet", 0.7, 0, 0]
       ]
     }
   },
@@ -90,23 +90,23 @@
       ],
       "clock": [
         "/execute as @a[scores={{TTS}}] at @s run playsound {SOUND} @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
-        "/scoreboard players set @a[scores={MMS_Service={TIME}..}] MMS_Service -1",
-        "/scoreboard players add @a[scores={MMS_Service=0..}] MMS_Service 1"
+        "/scoreboard players set @a[scores={mms={TIME}..}] mms -1",
+        "/scoreboard players add @a[scores={mms=0..}] mms 1"
       ],
       "address": [
-        "/execute as @a[scores={{TTS},MMS_Address={ADDRESS}}] at @s run playsound {SOUND} @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
-        "/scoreboard players set @a[scores={MMS_Service={TIME}..,MMS_Address={ADDRESS}}] MMS_Service -1",
-        "/scoreboard players add @a[scores={MMS_Service=0..,MMS_Address={ADDRESS}}] MMS_Service 1"
+        "/execute as @a[scores={{TTS},mms_id={ADDRESS}}] at @s run playsound {SOUND} @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
+        "/scoreboard players set @a[scores={mms={TIME}..,mms_id={ADDRESS}}] mms -1",
+        "/scoreboard players add @a[scores={mms=0..,mms_id={ADDRESS}}] mms 1"
       ],
       "lyrics": [
         "/titleraw @a actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}",
         "/titleraw @a[scores={{TTS}}] actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}",
-        "/titleraw @a[scores={{TTS},MMS_Address={ADDRESS}}] actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}"
+        "/titleraw @a[scores={{TTS},mms_id={ADDRESS}}] actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}"
       ],
       "timer_target_selector": {
-        "regular": "MMS_Service={VALUE}",
+        "regular": "mms={VALUE}",
         "compressed": [
-          "MMS_Service=!{VALUE}",
+          "mms=!{VALUE}",
           "{START}..{END}",
           ","
         ]
@@ -210,7 +210,7 @@
         ["note.didgeridoo", 0.8, 0, 0]
       ],
       "trumpet": [
-        ["note.trumpet", 1.2, 0, 0]
+        ["note.trumpet", 0.7, 0, 0]
       ]
     }
   },
@@ -221,23 +221,23 @@
       ],
       "clock": [
         "/execute as @a {TTS} at @s run playsound {SOUND} record @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
-        "/scoreboard players set @a[scores={MMS_Service={TIME}..}] MMS_Service -1",
-        "/scoreboard players add @a[scores={MMS_Service=0..}] MMS_Service 1"
+        "/scoreboard players set @a[scores={mms={TIME}..}] mms -1",
+        "/scoreboard players add @a[scores={mms=0..}] mms 1"
       ],
       "address": [
-        "/execute as @a if score @s MMS_Address matches {ADDRESS} {TTS} at @s run playsound {SOUND} record @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
-        "/scoreboard players set @a[scores={MMS_Service={TIME}..,MMS_Address={ADDRESS}}] MMS_Service -1",
-        "/scoreboard players add @a[scores={MMS_Service=0..,MMS_Address={ADDRESS}}] MMS_Service 1"
+        "/execute as @a if score @s mms_id matches {ADDRESS} {TTS} at @s run playsound {SOUND} record @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
+        "/scoreboard players set @a[scores={mms={TIME}..,mms_id={ADDRESS}}] mms -1",
+        "/scoreboard players add @a[scores={mms=0..,mms_id={ADDRESS}}] mms 1"
       ],
       "lyrics": [
         "/title @a actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]",
         "/execute as @a {TTS} run title @s actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]",
-        "/execute as @a if score @s MMS_Address matches {ADDRESS} {TTS} run title @s actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]"
+        "/execute as @a if score @s mms_id matches {ADDRESS} {TTS} run title @s actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]"
       ],
       "timer_target_selector": {
-        "regular": "if score @s MMS_Service matches {VALUE}",
+        "regular": "if score @s mms matches {VALUE}",
         "compressed": [
-          "unless score @s MMS_Service matches {VALUE}",
+          "unless score @s mms matches {VALUE}",
           "{START}..{END}",
           " "
         ]
@@ -345,7 +345,7 @@
         ["block.note_block.didgeridoo", 0.8, 0, 0]
       ],
       "trumpet": [
-        ["block.note_block.trumpet", 1.2, 0, 0]
+        ["block.note_block.trumpet", 0.7, 0, 0]
       ]
     }
   },
@@ -356,23 +356,23 @@
       ],
       "clock": [
         "/execute @a[scores={{TTS}}] ~~~ playsound {SOUND} @s ~~~ {VOLUME} {PITCH} {VOLUME}",
-        "/scoreboard players set @a[scores={MMS_Service={TIME}..}] MMS_Service -1",
-        "/scoreboard players add @a[scores={MMS_Service=0..}] MMS_Service 1"
+        "/scoreboard players set @a[scores={mms={TIME}..}] mms -1",
+        "/scoreboard players add @a[scores={mms=0..}] mms 1"
       ],
       "address": [
-        "/execute @a[scores={{TTS},MMS_Address={ADDRESS}}] ~~~ playsound {SOUND} @s ~~~ {VOLUME} {PITCH} {VOLUME}",
-        "/scoreboard players set @a[scores={MMS_Service={TIME}..,MMS_Address={ADDRESS}}] MMS_Service -1",
-        "/scoreboard players add @a[scores={MMS_Service=0..,MMS_Address={ADDRESS}}] MMS_Service 1"
+        "/execute @a[scores={{TTS},mms_id={ADDRESS}}] ~~~ playsound {SOUND} @s ~~~ {VOLUME} {PITCH} {VOLUME}",
+        "/scoreboard players set @a[scores={mms={TIME}..,mms_id={ADDRESS}}] mms -1",
+        "/scoreboard players add @a[scores={mms=0..,mms_id={ADDRESS}}] mms 1"
       ],
       "lyrics": [
         "/titleraw @a actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}",
         "/titleraw @a[scores={{TTS}}] actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}",
-        "/titleraw @a[scores={{TTS},MMS_Address={ADDRESS}}] actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}"
+        "/titleraw @a[scores={{TTS},mms_id={ADDRESS}}] actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}"
       ],
       "timer_target_selector": {
-        "regular": "MMS_Service={VALUE}",
+        "regular": "mms={VALUE}",
         "compressed": [
-          "MMS_Service=!{VALUE}",
+          "mms=!{VALUE}",
           "{START}..{END}",
           ","
         ]
@@ -473,21 +473,21 @@
       ],
       "clock": [
         "/execute @a[{TTS}] ~ ~ ~ playsound {SOUND} record @s ~ ~ ~ {VOLUME} {PITCH} {VOLUME}",
-        "/scoreboard players set @a[score_MMS_Service_min={TIME}] MMS_Service -1",
-        "/scoreboard players add @a[score_MMS_Service_min=0] MMS_Service 1"
+        "/scoreboard players set @a[score_mms_min={TIME}] mms -1",
+        "/scoreboard players add @a[score_mms_min=0] mms 1"
       ],
       "address": [
-        "/execute @a[{TTS},score_MMS_Address={ADDRESS},score_MMS_Address_min={ADDRESS}] ~ ~ ~ playsound {SOUND} record @s ~ ~ ~ {VOLUME} {PITCH} {VOLUME}",
-        "/scoreboard players set @a[score_MMS_Service_min={TIME},score_MMS_Address={ADDRESS},score_MMS_Address_min={ADDRESS}] MMS_Service -1",
-        "/scoreboard players add @a[score_MMS_Service_min=0,score_MMS_Address={ADDRESS},MMS_Address_min={ADDRESS}] MMS_Service 1"
+        "/execute @a[{TTS},score_mms_id={ADDRESS},score_mms_id_min={ADDRESS}] ~ ~ ~ playsound {SOUND} record @s ~ ~ ~ {VOLUME} {PITCH} {VOLUME}",
+        "/scoreboard players set @a[score_mms_min={TIME},score_mms_id={ADDRESS},score_mms_id_min={ADDRESS}] mms -1",
+        "/scoreboard players add @a[score_mms_min=0,score_mms_id={ADDRESS},mms_id_min={ADDRESS}] mms 1"
       ],
       "lyrics": [
         "/title @a actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]",
         "/title @a[{TTS}] actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]",
-        "/title @a[{TTS},score_MMS_Address={ADDRESS},score_MMS_Address_min={ADDRESS}] actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]"
+        "/title @a[{TTS},score_mms_id={ADDRESS},score_mms_id_min={ADDRESS}] actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]"
       ],
       "timer_target_selector": {
-        "regular": "score_MMS_Service={VALUE},score_MMS_Service_min={VALUE}",
+        "regular": "score_mms={VALUE},score_mms_min={VALUE}",
         "compressed": [
           "",
           "",

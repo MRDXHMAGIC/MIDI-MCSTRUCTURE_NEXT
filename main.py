@@ -14,7 +14,7 @@ import traceback
 import subprocess
 import webbrowser
 from math import ceil
-from tools import round_int, round_45, uuid, is_number, get_time_text
+from tools import round_int, round_45, uuid, is_number, get_time_text, get_color
 from writer import write_cmd
 from tkinter import filedialog
 from database import LyricsList, Note, Lyrics
@@ -120,7 +120,11 @@ def asset_load() -> None:
             ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
 
         logger.debug("Set Pygame Max Channels...")
-        pygame.mixer.set_num_channels(64)
+        pygame.mixer.set_num_channels(global_info["setting"]["channels_num"])
+
+        logger.debug("Features Files...")
+        with open("Asset/text/features.json", "rb") as _io:
+            global_asset["features"] = json.loads(_io.read())
 
         logger.debug("Loading Mapping Files...")
         with open("Asset/text/mapping.json", "rb") as _io:
@@ -571,61 +575,71 @@ def convertor(_setting, _task_id):
 
 def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[int, Note | str]:
     for _time, _data in _midi_file:
-        if _data["type"] == "text":
+        if _data.type == "lyrics":
             # 返回文本数据
-            yield round_int(_time / _setting["time_per_tick"]), _data["text"]
+            yield round_int(_time / _setting["time_per_tick"]), _data.value
 
-        elif _data["type"] == "note":
+        elif _data.type == "note":
             # 去除打击乐器
-            if _data["percussion"] and not _setting["percussion"]: continue
-
-            # 获取游戏中的乐器名称
-            if _data["percussion"]:
-                _program = _profile["sound_list"].get(global_asset["mapping"]["percussion"].get(str(_data["program"]), global_asset["mapping"]["percussion"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["percussion"]["undefined"]])
-            else:
-                if _data["program"] == -1:
-                    _program = _profile["sound_list"][global_asset["mapping"]["default"]]
-                else:
-                    _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data["program"]), global_asset["mapping"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["undefined"]])
-
-            if _program is None: continue
+            if _data.percussion and not _setting["percussion"]: continue
 
             _delay_time = 0
-            # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
-            for _n, _note in enumerate(_program):
-                # 如果禁用单音符对应多个我的世界乐器的功能，仅循环一次就退出
-                if not _setting["adjustment"] and _n > 0:
-                    break
-
-                # 累加配置文件中我的世界乐器之间的时间间隔
-                _delay_time += _note[3]
-
-                _pitch_index = _data["pitch"]
-                _note_velocity = _data["velocity"]
-
-                # 如果启用调整音符功能，则会根据配置文件对音量和音调进行调整
-                if _setting["adjustment"]:
-                    _pitch_index += _note[2]
-                    _note_velocity *= _note[1]
-
-                _pitch = get_pitch(_pitch_index)
-
-                if _setting["extension"]:
-                    for _i in _profile["sound_extension"]:
-                        if _i[0][0] <= _pitch <= _i[0][1]:
-                            _sound = _i[1].replace("{SOUND}", _note[0])
-                            _pitch *= _i[2]
-                            break
-                    else:
-                        logger.warn("Can Not Found a Suitable Extension, Pitch=" + str(_pitch))
-                        continue
+            while _data.time + _delay_time < (_time if _time is not None else _data.time + 0.01):
+                # 获取游戏中的乐器名称
+                if _data.percussion:
+                    _program = _profile["sound_list"].get(global_asset["mapping"]["percussion"].get(str(_data.program), global_asset["mapping"]["percussion"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["percussion"]["undefined"]])
                 else:
-                    _sound = _note[0]
+                    if _data.program == -1:
+                        _program = _profile["sound_list"][global_asset["mapping"]["default"]]
+                    else:
+                        _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data.program), global_asset["mapping"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["undefined"]])
 
-                # 返回音符数据
-                yield round_int((_time + _delay_time) / _setting["time_per_tick"]), Note(_sound, (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], _pitch, _data["panning"])
+                if _program is None: continue
+
+                # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
+                for _n, _note in enumerate(_program):
+                    # 如果禁用单音符对应多个我的世界乐器的功能，仅循环一次就退出
+                    if not _setting["adjustment"] and _n > 0:
+                        break
+
+                    # 累加配置文件中我的世界乐器之间的时间间隔
+                    _delay_time += _note[3]
+
+                    _pitch_index = _data.pitch
+                    _note_velocity = _data.velocity
+
+                    # 如果启用调整音符功能，则会根据配置文件对音量和音调进行调整
+                    if _setting["adjustment"]:
+                        _pitch_index += _note[2]
+                        _note_velocity *= _note[1]
+
+                    _pitch = get_pitch(_pitch_index)
+
+                    if _setting["extension"]:
+                        for _i in _profile["sound_extension"]:
+                            if _i[0][0] <= _pitch <= _i[0][1]:
+                                _sound = _i[1].replace("{SOUND}", _note[0])
+                                _pitch *= _i[2]
+                                break
+                        else:
+                            logger.warn("Can Not Found a Suitable Extension, Pitch=" + str(_pitch))
+                            continue
+                    else:
+                        _sound = _note[0]
+
+                    # 返回音符数据
+                    yield round_int((_data.time + _delay_time) / _setting["time_per_tick"]), Note(_sound, (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], _pitch, _data.panning)
+
+                if not _setting["hold"]: break
+
+                if _data.percussion:
+                    if "hold" not in global_asset["features"]["percussion"].get(str(_data.program), global_asset["features"]["percussion"]["undefined"]): break
+                else:
+                    if "hold" not in global_asset["features"].get(str(_data.program), global_asset["features"]["undefined"]): break
+
+                _delay_time += _setting["time_per_tick"]
         else:
-            raise TypeError("Unknown Data Type: " + str(_data["type"]))
+            raise TypeError("Unknown Data Type: " + str(_data.type))
 
 def get_pitch(_index: int) -> float:
     return 2 ** ((_index - 66) / 12)
@@ -818,47 +832,6 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
         global_info["message_info"][1] += timer.get_time()
 
 # 功能函数
-def get_color(_surf: pygame.Surface) -> tuple[int]:
-    _colors = []
-    for _x in range(_surf.size[0]):
-        for _y in range(_surf.size[1]):
-            _colors.append(_surf.get_at((_x, _y))[:3])
-
-    _colors.sort(key=lambda _i: sum(_i) / len(_i))
-
-    _num = 0
-    _average_color = [0, 0, 0]
-    for _color in _colors[round_int(len(_colors) * (1 / 3)):round_int(len(_colors) * (2 / 3))]:
-        _average_color = tuple(_a + _b for _a, _b in zip(_average_color, _color))
-        _num += 1
-
-    _average_color = tuple(_i / _num for _i in _average_color)
-
-    _color_list = (
-        (255, 255, 255),
-        (255, 178, 186),
-        (255, 180, 169),
-        (255, 178, 190),
-        (249, 171, 255),
-        (211, 187, 255),
-        (186, 195, 255),
-        (158, 202, 255),
-        (141, 205, 255),
-        (168, 216, 241),
-        (83, 219, 201),
-        (122, 220, 119),
-        (112, 219, 167),
-        (193, 208, 44),
-        (219, 201, 10),
-        (250, 189, 0),
-        (255, 184, 112),
-        (255, 181, 160),
-        (255, 181, 154),
-        (123, 208, 255)
-    )
-
-    return min(((sum((_a - _b + (min(_average_color) - min(_color))) ** 2 for _a, _b in zip(_color, _average_color)), _color) for _color in _color_list), key=lambda _i: _i[0])[1]
-
 def watchdog():
     try:
         while True:
@@ -925,7 +898,7 @@ def set_selector_num(_num: None | int = None) -> None:
 def show_download(_title: str, _url: str, _target_path, _callback=lambda: remove_page(overlay_page)):
     _state = {"state": 0, "buffer": NetBuffer()}
     threading.Thread(target=download, args=(_url, _state, _target_path, _callback), daemon=True).start()
-    add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "button_state": [0]}])
+    add_page(overlay_page, [download_screen, {"state": _state, "title": _title}])
 
 def reboot_to_update():
     shutil.unpack_archive("Asset/updater/package.tar.zst", "Updater")
@@ -1023,6 +996,7 @@ def player_callback(_path: str, _ask: bool, _info):
                 },
                 "compression": 1,
                 "extension": False,
+                "hold": global_info["convertor"]["hold"],
                 "ask_mapping": _ask and global_info["setting"]["ask_mapping"],
                 "player_info": _info
              },
@@ -1305,7 +1279,7 @@ def player_screen(_info, _input):
             case 0:
                 if _info["armed"]: threading.Thread(target=open_filedialog, args=(player_callback, [("MIDI Files", ".mid")], True, _info), daemon=True).start()
             case 1:
-                add_page(overlay_page, [player_setting_screen, {"button_state": [0, 0, 0, 0, 0], "info": _info}])
+                add_page(overlay_page, [player_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0], "info": _info}])
             case 2:
                 if _info["position"] >= 100:
                     _info["position"] -= 100
@@ -1334,7 +1308,8 @@ def player_setting_screen(_info, _input):
             (0.025, 0.177, 0.95, 0.089, ("歌词字幕设置", 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, ("打击乐器 " + ("保留" if global_info["convertor"]["percussion"] else "去除"), 0.035, _info["button_state"][2]), 2),
             (0.025, 0.444, 0.95, 0.089, ("乐器调整 " + ("启用" if global_info["convertor"]["adjustment"] else "关闭"), 0.035, _info["button_state"][3]), 3),
-            (0.025, 0.578, 0.95, 0.089, ("平均音量 " + (str(global_info["convertor"]["volume"]) + "%" if global_info["convertor"]["volume"] else "保持原始音量"), 0.035, _info["button_state"][4]), 4)
+            (0.025, 0.578, 0.95, 0.089, ("长音特性 " + ("启用" if global_info["convertor"]["hold"] else "关闭"), 0.035, _info["button_state"][4]), 4),
+            (0.025, 0.711, 0.95, 0.089, ("平均音量 " + (str(global_info["convertor"]["volume"]) + "%" if global_info["convertor"]["volume"] else "保持原始音量"), 0.035, _info["button_state"][5]), 5)
         ),
         pygame.mouse.get_pos()
     )
@@ -1347,7 +1322,8 @@ def player_setting_screen(_info, _input):
             case 1: add_page(overlay_page, [lyrics_setting_screen, {"button_state": [0, 0, 0]}])
             case 2: global_info["convertor"]["percussion"] = not global_info["convertor"]["percussion"]
             case 3: global_info["convertor"]["adjustment"] = not global_info["convertor"]["adjustment"]
-            case 4: set_volume()
+            case 4: global_info["convertor"]["hold"] = not global_info["convertor"]["hold"]
+            case 5: set_volume()
 
     return _root
 
@@ -1408,18 +1384,16 @@ def convertor_screen(_info, _input):
 
     if global_info["convertor"]["time_per_tick"] != -1:
         _other_text = str(global_info["convertor"]["time_per_tick"]) + "ms"
-        if global_info["convertor"]["panning"]:
-            _other_text += "/声相偏移"
-        if global_info["convertor"]["skip"]:
-            _other_text += "/静音跳过"
-        if global_info["convertor"]["percussion"]:
-            _other_text += "/打击乐器"
+        if global_info["convertor"]["hold"]:
+            _other_text += "/长音"
         if global_info["convertor"]["adjustment"]:
             _other_text += "/乐器调整"
         if global_info["convertor"]["lyrics"]["enable"]:
             _other_text += "/歌词"
         if global_info["convertor"]["compression"]:
             _other_text += "/压缩"
+        if global_info["convertor"]["extension"]:
+            _other_text += "/音域扩展"
     else:
         _other_text = "高级设置"
 
@@ -1661,19 +1635,10 @@ def download_screen(_info, _input):
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, (_info["title"], 0.035, 255), -1),
-            (0.025, 0.177, 0.95, 0.089, (_text, 0.035, 255), -1),
-            (0.025, 0.311, 0.95, 0.089, ("取消下载", 0.035, _info["button_state"][0]), 0)
+            (0.025, 0.177, 0.95, 0.089, (_text, 0.035, 255), -1)
         ),
         pygame.mouse.get_pos()
     )
-
-    change_button_alpha(_info["button_state"], _id)
-
-    if "mouse_left" in _input and not _input["mouse_left"]:
-        match _id:
-            case 0:
-                _info["state"]["buffer"].set_exception(KeyboardInterrupt)
-                _info["state"]["buffer"].set_done()
 
     return _root
 
@@ -1843,7 +1808,7 @@ def advanced_setting_screen(_info, _input):
             (0.025, 0.044, 0.95, 0.089, ("播放速度设置", 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, ("歌词字幕设置", 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, ("不常用的设置", 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.444, 0.95, 0.089, ("打击乐器 " + ("保留" if global_info["convertor"]["percussion"] else "去除"), 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.444, 0.95, 0.089, ("长音特性 " + ("启用" if global_info["convertor"]["hold"] else "关闭"), 0.035, _info["button_state"][3]), 3),
             (0.025, 0.578, 0.95, 0.089, ("乐器调整 " + ("启用" if global_info["convertor"]["adjustment"] else "关闭"), 0.035, _info["button_state"][4]), 4),
             (0.025, 0.711, 0.95, 0.089, ("音域扩展 " + ("启用" if global_info["convertor"]["extension"] else "关闭"), 0.035, _info["button_state"][5]), 5),
             (0.025, 0.844, 0.95, 0.089, ("指令压缩 " + ("不可用" if global_info["convertor"]["command_type"] == 0 or (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0) else ("启用" if global_info["convertor"]["compression"] else "关闭")), 0.035, _info["button_state"][6]), 6)
@@ -1857,8 +1822,8 @@ def advanced_setting_screen(_info, _input):
         match _id:
             case 0: add_page(overlay_page, [speed_setting_screen, {"button_state": [0, 0, 0]}])
             case 1: add_page(overlay_page, [lyrics_setting_screen, {"button_state": [0, 0, 0]}])
-            case 2: add_page(overlay_page, [other_setting_screen, {"button_state": [0, 0]}])
-            case 3: global_info["convertor"]["percussion"] = not global_info["convertor"]["percussion"]
+            case 2: add_page(overlay_page, [other_setting_screen, {"button_state": [0, 0, 0]}])
+            case 3: global_info["convertor"]["hold"] = not global_info["convertor"]["hold"]
             case 4: global_info["convertor"]["adjustment"] = not global_info["convertor"]["adjustment"]
             case 5:
                 global_info["convertor"]["extension"] = not global_info["convertor"]["extension"]
@@ -1881,6 +1846,7 @@ def other_setting_screen(_info, _input):
         (
             (0.025, 0.044, 0.95, 0.089, ("静音跳过 " + ("启用" if global_info["convertor"]["skip"] else "关闭"), 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, ("声相偏移 " + ("启用" if global_info["convertor"]["panning"] else "关闭"), 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("打击乐器 " + ("保留" if global_info["convertor"]["percussion"] else "去除"), 0.035, _info["button_state"][2]), 2)
         ),
         pygame.mouse.get_pos()
     )
@@ -1891,6 +1857,7 @@ def other_setting_screen(_info, _input):
         match _id:
             case 0: global_info["convertor"]["skip"] = not global_info["convertor"]["skip"]
             case 1: global_info["convertor"]["panning"] = not global_info["convertor"]["panning"]
+            case 2: global_info["convertor"]["percussion"] = not global_info["convertor"]["percussion"]
 
     return _root
 
@@ -2055,7 +2022,7 @@ def asking_screen(_info, _input):
 
     return _root
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "extension": False, "compression": False, "ask_mapping": True}}
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "channels_num": 32, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

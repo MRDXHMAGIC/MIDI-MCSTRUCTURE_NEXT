@@ -67,7 +67,9 @@ try:
         if os.path.splitext(i)[1] == ".exe": os.rename(get_path(i), get_path("MIDI-MCSTRUCTURE_NEXT.exe"))
         break
 
+    add_log("I", "Wipe Cache")
     if os.path.exists("Cache"): rmtree("Cache")
+    add_log("I", "Clean Up Update Files")
     if os.path.exists("Update"): rmtree("Update")
 
     add_log("I", "Update Successfully:")

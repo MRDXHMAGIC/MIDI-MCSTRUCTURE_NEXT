@@ -116,6 +116,36 @@ class Lyrics:
     def __repr__(self) -> str:
         return f"Lyrics<{self.__last} | {self.__head} {self.__tail} | {self.__next}>"
 
+class NoteData:
+    __slots__ = (
+        "percussion",
+        "velocity",
+        "panning",
+        "program",
+        "pitch",
+        "time",
+        "type"
+    )
+
+    def __init__(self, _time: float, _pitch: float, _program: int, _panning: tuple[float], _velocity: float):
+        self.type = "note"
+        self.time = _time
+        self.pitch = _pitch
+        self.program = _program
+        self.panning = _panning
+        self.velocity = _velocity
+        self.percussion = False
+
+class LyricsData:
+    __slots__ = (
+        "type",
+        "value"
+    )
+
+    def __init__(self, _text: str):
+        self.type = "lyrics"
+        self.value = _text
+
 class InfoList:
     def __init__(self, _init_value) -> None:
         self.list_info = {0: _init_value}
@@ -232,3 +262,33 @@ class LyricsList:
                     yield _k, Lyrics(self.lyrics_list[_n - 1] if _n > 0 else "", self.lyrics_list[_n][:_i - _lyrics_position], self.lyrics_list[_n][_i - _lyrics_position:], self.lyrics_list[_n + 1] if _n < _lyrics_list_length - 1 else "")
                     break
                 _lyrics_position += _text_length
+
+class Stack:
+    __slots__ = (
+        "__data",
+    )
+
+    def __init__(self):
+        self.__data: dict[int, dict[int, list[NoteData]]] = {}
+
+    def put(self, _channel: int, _data: NoteData):
+        _data.percussion = _channel == 9
+
+        if _channel not in self.__data:
+            self.__data[_channel] = {_data.pitch: [_data]}
+        elif _data.pitch not in self.__data[_channel]:
+            self.__data[_channel][_data.pitch] = [_data]
+        else:
+            self.__data[_channel][_data.pitch].append(_data)
+
+    def get(self, _channel: int, _pitch: int) -> NoteData:
+        try:
+            return self.__data[_channel][_pitch].pop()
+        except:
+            return None
+
+    def __iter__(self):
+        for _channel in self.__data.values():
+            for _notes in _channel.values():
+                for _note in _notes:
+                    yield _note

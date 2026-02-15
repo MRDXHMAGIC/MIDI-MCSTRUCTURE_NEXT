@@ -1,10 +1,15 @@
 import os
 import time
 import json
+import pygame
 import shutil
 import tarfile
 import subprocess
+from tools import get_color
 from compression.zstd import CompressionParameter
+
+if os.path.exists("dist"): shutil.rmtree("dist")
+os.mkdir("dist")
 
 with open("Asset/text/setting.json", "rb") as io:
     setting = json.loads(io.read())
@@ -14,14 +19,47 @@ EDITION = setting["edition"]
 
 TITLE = f"V{VERSION}-{EDITION}"
 
+
+pygame.font.init()
+
+root = pygame.Surface((760, 450))
+font = pygame.font.Font("Resource/minecraft.ttf", 32)
+background = pygame.transform.gaussian_blur(pygame.image.load("Asset/image/default_menu_background.png"), 24)
+
+font.set_linesize(40)
+
+for x in range(root.size[0]):
+    for y in range(root.size[1]):
+        root.set_at((x, y), tuple(map(lambda i: i * (x / (root.size[0] - 1)) * (1 - (y / (root.size[1] - 1))), background.get_at((x + 20, y)))))
+
+text_surf = font.render(f"V{setting["version"] // 1000000}\n{setting["version"] % 1000000}", True, get_color(pygame.image.load("Asset/image/default_menu_background.png")))
+
+offset = [float("INF"), 0]
+
+for x in range(text_surf.size[0]):
+    for y in range(text_surf.size[1]):
+        if text_surf.get_at((x, y))[3] != 0:
+            if offset[0] > x:
+                offset[0] = x
+
+            if offset[1] < y:
+                offset[1] = y
+
+offset = (offset[0], offset[1])
+
+root.blit(pygame.image.load("Asset/image/logo.png"), ((root.size[0] - 560) // 2, (root.size[1] - 64) // 2))
+root.blit(text_surf, (40 - offset[0], root.size[1] - 40 - offset[1]))
+
+pygame.image.save(root, "dist/boot.png")
+
+
+
 options = {
     CompressionParameter.compression_level: CompressionParameter.compression_level.bounds()[1],
     CompressionParameter.checksum_flag: True
 }
 
 
-if os.path.exists("dist"): shutil.rmtree("dist")
-os.mkdir("dist")
 
 
 shutil.copytree("Asset", "dist/Asset")
@@ -30,6 +68,7 @@ with open("dist/Asset/text/setting.json", "rb") as io:
 
 setting["log_level"] = 4
 setting["ask_mapping"] = False
+setting["channels_num"] = 64
 setting["compression_level"] = 0
 setting["disable_update_check"] = False
 
@@ -53,7 +92,7 @@ if not os.path.exists("dist/Asset/updater"): os.makedirs("dist/Asset/updater")
 with tarfile.open("dist/Asset/updater/package.tar.zst", "w:zst", options=options) as io:
     io.add("dist/Updater", arcname="")
 
-subprocess.Popen(f".venv/Scripts/pyinstaller.exe -D -w --optimize 2 --splash boot.png -i icon.ico main.py -y -n \"MIDI-MCSTRUCTURE_NEXT\"").wait()
+subprocess.Popen(f".venv/Scripts/pyinstaller.exe -D -w --optimize 2 --splash dist/boot.png -i icon.ico main.py -y -n \"MIDI-MCSTRUCTURE_NEXT\"").wait()
 
 shutil.copytree("dist/Asset", "dist/MIDI-MCSTRUCTURE_NEXT/Asset")
 

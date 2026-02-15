@@ -1,7 +1,7 @@
 import math
 import mido
 from tools import round_int, round_45
-from database import InfoList
+from database import InfoList, Stack, NoteData
 
 class TempoList:
     def __init__(self, _ticks_per_beat: int) -> None:
@@ -22,7 +22,7 @@ class TempoList:
             self.tempo_list.append([_time, _tempo])
         self.is_revised = True
 
-    def compute_tick_time(self, _time: int | float | str) -> float:
+    def compute_time(self, _time: int | float | str) -> float:
         if not isinstance(_time, (int, float, str)):
             raise ValueError("Time Must be int, float or str!")
 
@@ -73,7 +73,7 @@ class MIDIReader:
                     _tempo_info.add_tempo(_time, _message.tempo)
                 # 获取音符时间信息
                 elif _message.type == "note_on":
-                    yield _tempo_info.compute_tick_time(_message.time)
+                    yield _tempo_info.compute_time(_message.time)
 
     def scan_instruments(self):
         _channel_info = {}
@@ -112,7 +112,7 @@ class MIDIReader:
                     # 初始化
                     if _channel not in _program_info: _program_info[_channel] = []
                     # 转换时间
-                    _abs_time = int(round_45(_tempo_info.compute_tick_time(_time) / 1000))
+                    _abs_time = int(round_45(_tempo_info.compute_time(_time) / 1000))
                     # 记录出现的时间范围
                     for _i in _program_info[_channel]:
                         if _i[1] == _data:
@@ -136,8 +136,9 @@ class MIDIReader:
         self.__instruments_mapping = _mapping
 
     def __iter__(self):
-        _channel_info = {}
+        _stack = Stack()
         _tempo_info = TempoList(self.__midi_file.ticks_per_beat)
+        _channel_info = {}
         # 遍历每个轨道
         for _track in self.__midi_file.tracks:
             # 设置轨道初始时间
@@ -204,15 +205,14 @@ class MIDIReader:
                     else:
                         _note_pitch = _message.note
                         _note_program = _channel_info[_channel]["program"].match_info(_time)
+
                     # 打包数据
-                    _data = {
-                        "type": "note",
-                        "percussion": _channel == 9,
-                        "velocity": _note_velocity,
-                        "panning": _note_panning,
-                        "program": _note_program,
-                        "pitch": _note_pitch
-                    }
+                    _stack.put(_channel, NoteData(_tempo_info.compute_time(_time), _note_pitch, _note_program, _note_panning, _note_velocity))
+
+                elif _message.type == "note_off" or (_message.type == "note_on" and _message.velocity == 0):
+                    _data = _stack.get(_channel, _message.note)
 
                 # 将音符时间转为游戏tick时间并返回结果
-                if _data is not None: yield _tempo_info.compute_tick_time(_time), _data
+                if _data is not None: yield _tempo_info.compute_time(_time), _data
+
+        for _data in _stack: yield None, _data
