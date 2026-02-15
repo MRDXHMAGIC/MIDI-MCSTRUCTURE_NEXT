@@ -22,6 +22,14 @@ from ui_manager import UIManager
 from midi_reader import MIDIReader
 
 class NetBuffer:
+    __slots__ = (
+        "pos",
+        "size",
+        "__data",
+        "__done",
+        "__exception"
+    )
+
     def __init__(self):
         self.pos = 0
         self.size = 0
@@ -592,18 +600,30 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
                 # 累加配置文件中我的世界乐器之间的时间间隔
                 _delay_time += _note[3]
 
-                # 如果启用调整音符功能，则会根据配置文件对音量和音调进行调整
-
-                # 获取游戏中的音调值
-                _pitch = _data["pitch"]
+                _pitch_index = _data["pitch"]
                 _note_velocity = _data["velocity"]
 
+                # 如果启用调整音符功能，则会根据配置文件对音量和音调进行调整
                 if _setting["adjustment"]:
-                    _pitch += _note[2]
+                    _pitch_index += _note[2]
                     _note_velocity *= _note[1]
 
+                _pitch = get_pitch(_pitch_index)
+
+                if _setting["extension"]:
+                    for _i in _profile["sound_extension"]:
+                        if _i[0][0] <= _pitch <= _i[0][1]:
+                            _sound = _i[1].replace("{SOUND}", _note[0])
+                            _pitch *= _i[2]
+                            break
+                    else:
+                        logger.warn("Can Not Found a Suitable Extension, Pitch=" + str(_pitch))
+                        continue
+                else:
+                    _sound = _note[0]
+
                 # 返回音符数据
-                yield round_int((_time + _delay_time) / _setting["time_per_tick"]), Note(_note[0], (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], get_pitch(_pitch), _data["panning"])
+                yield round_int((_time + _delay_time) / _setting["time_per_tick"]), Note(_sound, (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], _pitch, _data["panning"])
         else:
             raise TypeError("Unknown Data Type: " + str(_data["type"]))
 
@@ -905,7 +925,7 @@ def set_selector_num(_num: None | int = None) -> None:
 def show_download(_title: str, _url: str, _target_path, _callback=lambda: remove_page(overlay_page)):
     _state = {"state": 0, "buffer": NetBuffer()}
     threading.Thread(target=download, args=(_url, _state, _target_path, _callback), daemon=True).start()
-    add_page(overlay_page, [download_screen, {"state": _state, "title": _title}])
+    add_page(overlay_page, [download_screen, {"state": _state, "title": _title, "button_state": [0]}])
 
 def reboot_to_update():
     shutil.unpack_archive("Asset/updater/package.tar.zst", "Updater")
@@ -1002,6 +1022,7 @@ def player_callback(_path: str, _ask: bool, _info):
                     "joining": global_info["convertor"]["lyrics"]["joining"]
                 },
                 "compression": 1,
+                "extension": False,
                 "ask_mapping": _ask and global_info["setting"]["ask_mapping"],
                 "player_info": _info
              },
@@ -1142,7 +1163,9 @@ def downloader(_url, _buffer: NetBuffer):
     try:
         _response = requests.get(_url, stream=True)
 
-        _buffer.size = int(_response.headers["content-length"])
+        _response.raise_for_status()
+
+        _buffer.size = int(_response.headers.get("content-length", 0))
 
         with _response as _net:
             for _block in _net.iter_content(5120):
@@ -1398,7 +1421,7 @@ def convertor_screen(_info, _input):
         if global_info["convertor"]["compression"]:
             _other_text += "/压缩"
     else:
-        _other_text = "其他设置"
+        _other_text = "高级设置"
 
     _root, _id = ui_manager.apply_ui(
         (
@@ -1428,7 +1451,7 @@ def convertor_screen(_info, _input):
             case 3:
                 if global_info["convertor"]["time_per_tick"] == -1:
                     global_info["convertor"]["time_per_tick"] = 50
-                add_page(overlay_page, [other_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0]}])
+                add_page(overlay_page, [advanced_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0]}])
             case 4:
                 if not global_info["convertor"]["file"]:
                     global_info["message"].append("请选择文件")
@@ -1638,10 +1661,19 @@ def download_screen(_info, _input):
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, (_info["title"], 0.035, 255), -1),
-            (0.025, 0.177, 0.95, 0.089, (_text, 0.035, 255), -1)
+            (0.025, 0.177, 0.95, 0.089, (_text, 0.035, 255), -1),
+            (0.025, 0.311, 0.95, 0.089, ("取消下载", 0.035, _info["button_state"][0]), 0)
         ),
         pygame.mouse.get_pos()
     )
+
+    change_button_alpha(_info["button_state"], _id)
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0:
+                _info["state"]["buffer"].set_exception(KeyboardInterrupt)
+                _info["state"]["buffer"].set_done()
 
     return _root
 
@@ -1802,7 +1834,7 @@ def setting_screen(_info, _input):
 
     return _root
 
-def other_setting_screen(_info, _input):
+def advanced_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
@@ -1810,10 +1842,10 @@ def other_setting_screen(_info, _input):
         (
             (0.025, 0.044, 0.95, 0.089, ("播放速度设置", 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, ("歌词字幕设置", 0.035, _info["button_state"][1]), 1),
-            (0.025, 0.311, 0.95, 0.089, ("静音跳过 " + ("启用" if global_info["convertor"]["skip"] else "关闭"), 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.311, 0.95, 0.089, ("不常用的设置", 0.035, _info["button_state"][2]), 2),
             (0.025, 0.444, 0.95, 0.089, ("打击乐器 " + ("保留" if global_info["convertor"]["percussion"] else "去除"), 0.035, _info["button_state"][3]), 3),
             (0.025, 0.578, 0.95, 0.089, ("乐器调整 " + ("启用" if global_info["convertor"]["adjustment"] else "关闭"), 0.035, _info["button_state"][4]), 4),
-            (0.025, 0.711, 0.95, 0.089, ("声相偏移 " + ("启用" if global_info["convertor"]["panning"] else "关闭"), 0.035, _info["button_state"][5]), 5),
+            (0.025, 0.711, 0.95, 0.089, ("音域扩展 " + ("启用" if global_info["convertor"]["extension"] else "关闭"), 0.035, _info["button_state"][5]), 5),
             (0.025, 0.844, 0.95, 0.089, ("指令压缩 " + ("不可用" if global_info["convertor"]["command_type"] == 0 or (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0) else ("启用" if global_info["convertor"]["compression"] else "关闭")), 0.035, _info["button_state"][6]), 6)
         ),
         pygame.mouse.get_pos()
@@ -1825,13 +1857,40 @@ def other_setting_screen(_info, _input):
         match _id:
             case 0: add_page(overlay_page, [speed_setting_screen, {"button_state": [0, 0, 0]}])
             case 1: add_page(overlay_page, [lyrics_setting_screen, {"button_state": [0, 0, 0]}])
-            case 2: global_info["convertor"]["skip"] = not global_info["convertor"]["skip"]
+            case 2: add_page(overlay_page, [other_setting_screen, {"button_state": [0, 0]}])
             case 3: global_info["convertor"]["percussion"] = not global_info["convertor"]["percussion"]
             case 4: global_info["convertor"]["adjustment"] = not global_info["convertor"]["adjustment"]
-            case 5: global_info["convertor"]["panning"] = not global_info["convertor"]["panning"]
+            case 5:
+                global_info["convertor"]["extension"] = not global_info["convertor"]["extension"]
+                if global_info["convertor"]["extension"]:
+                    if global_info["convertor"]["edition"] == 0:
+                        global_info["message"].append("基岩版无需开启，此功能是为Java版设计！")
+                    else:
+                        global_info["message"].append("目标游戏存档需要安装MMS音域扩展资源包！")
             case 6:
                 if global_info["convertor"]["command_type"] != 0 and not (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0):
                     global_info["convertor"]["compression"] = not global_info["convertor"]["compression"]
+
+    return _root
+
+def other_setting_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        remove_page(overlay_page)
+
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("静音跳过 " + ("启用" if global_info["convertor"]["skip"] else "关闭"), 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("声相偏移 " + ("启用" if global_info["convertor"]["panning"] else "关闭"), 0.035, _info["button_state"][1]), 1),
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    change_button_alpha(_info["button_state"], _id)
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0: global_info["convertor"]["skip"] = not global_info["convertor"]["skip"]
+            case 1: global_info["convertor"]["panning"] = not global_info["convertor"]["panning"]
 
     return _root
 
@@ -1996,7 +2055,7 @@ def asking_screen(_info, _input):
 
     return _root
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "compression": False, "ask_mapping": True}}
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "extension": False, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

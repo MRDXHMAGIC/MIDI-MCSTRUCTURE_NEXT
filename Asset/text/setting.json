@@ -1,8 +1,8 @@
 {
   "id": 1,
   "fps": 60,
-  "version": 18260215,
-  "edition": "Release",
+  "version": 19260215,
+  "edition": "Alpha",
   "log_level": 5,
   "ask_mapping": false,
   "animation_speed": 10,
