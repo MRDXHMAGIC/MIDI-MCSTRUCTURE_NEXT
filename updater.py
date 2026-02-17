@@ -47,6 +47,9 @@ try:
     time.sleep(1)
     os.chdir(get_path())
 
+    add_log("I", "Wipe Cache")
+    if os.path.exists("Cache"): rmtree("Cache")
+
     add_log("I", "Load Old Settings")
     with open(get_path("Asset/text/setting.json"), "r", encoding="utf-8") as io:
         old_setting = json.load(io)
@@ -75,8 +78,6 @@ try:
     add_log("I", "Install Update:")
     install()
 
-    add_log("I", "Wipe Cache")
-    if os.path.exists("Cache"): rmtree("Cache")
     add_log("I", "Clean Up Update Files")
     if os.path.exists("Update"): rmtree("Update")
 

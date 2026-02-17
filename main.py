@@ -589,25 +589,21 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
             # 去除打击乐器
             if _data.percussion and not _setting["percussion"]: continue
 
+            # 获取游戏中的乐器名称
+            if _data.percussion:
+                _program = _profile["sound_list"].get(global_asset["mapping"]["percussion"].get(str(_data.program), global_asset["mapping"]["percussion"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["percussion"]["undefined"]])
+            else:
+                if _data.program == -1:
+                    _program = _profile["sound_list"][global_asset["mapping"]["default"]]
+                else:
+                    _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data.program), global_asset["mapping"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["undefined"]])
+
+            if _program is None: continue
+
             _delay_time = 0
             while _data.time + _delay_time < (_time if _time is not None else _data.time + 0.01):
-                # 获取游戏中的乐器名称
-                if _data.percussion:
-                    _program = _profile["sound_list"].get(global_asset["mapping"]["percussion"].get(str(_data.program), global_asset["mapping"]["percussion"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["percussion"]["undefined"]])
-                else:
-                    if _data.program == -1:
-                        _program = _profile["sound_list"][global_asset["mapping"]["default"]]
-                    else:
-                        _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data.program), global_asset["mapping"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["undefined"]])
-
-                if _program is None: continue
-
                 # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
-                for _n, _note in enumerate(_program):
-                    # 如果禁用单音符对应多个我的世界乐器的功能，仅循环一次就退出
-                    if not _setting["adjustment"] and _n > 0:
-                        break
-
+                for _note in _program:
                     # 累加配置文件中我的世界乐器之间的时间间隔
                     _delay_time += _note[3]
 
@@ -635,6 +631,8 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
 
                     # 返回音符数据
                     yield round_int((_data.time + _delay_time) / _setting["time_per_tick"]), Note(_sound, (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], _pitch, _data.panning)
+
+                    if not _setting["adjustment"]: break
 
                 if not _setting["hold"]: break
 
@@ -844,7 +842,7 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
 def watchdog():
     try:
         while True:
-            if global_info["watch_dog"] >= 30:
+            if global_info["watch_dog"] >= 100:
                 logger.fatal("Run Timed Out of 3000ms Exceeded!\nProcess is Killed by Watchdog!")
                 logger.done()
                 break
@@ -2080,7 +2078,7 @@ def asking_screen(_info, _input):
     return _root
 
 
-if base_path := os.path.abspath(getattr(sys, "_MEIPASS", None)):
+if base_path := getattr(sys, "_MEIPASS", None):
     if os.path.basename(base_path) == "_internal":
         os.chdir(os.path.dirname(base_path))
     else:
@@ -2107,7 +2105,7 @@ except:
 try:
     timer = pygame.time.Clock()
 
-    threading.Thread(target=watchdog).start()
+    threading.Thread(target=watchdog, daemon=True).start()
     threading.Thread(target=asset_load, daemon=True).start()
 
     while not global_info["exit"]:
@@ -2152,8 +2150,6 @@ except:
     logger.fatal(traceback.format_exc())
     global_info["exit"] = 3
 finally:
-    if global_info["exit"] != 3: pygame.quit()
-
     if not os.path.exists("Asset/text"):
         os.makedirs("Asset/text")
 
@@ -2162,10 +2158,11 @@ finally:
 
     if global_info["exit"] == 2:
         subprocess.Popen("Updater/updater.exe " + os.path.abspath(""))
-
-    if global_info["exit"] == 3:
+    elif global_info["exit"] == 3:
         window.blit(global_asset["error"], (0, 0))
         pygame.display.flip()
-    else:
-        logger.done()
-        os._exit(0)
+        time.sleep(3)
+
+    pygame.quit()
+    logger.done()
+    os._exit(0)
