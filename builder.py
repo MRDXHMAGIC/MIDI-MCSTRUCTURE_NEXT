@@ -28,6 +28,26 @@ background = pygame.transform.gaussian_blur(pygame.image.load("Asset/image/defau
 
 font.set_linesize(40)
 
+icon = pygame.Surface((450, 450))
+qq_bg = pygame.Surface((800, 450))
+
+for x in range(qq_bg.size[0]):
+    for y in range(qq_bg.size[1]):
+        qq_bg.set_at((x, y), tuple(map(lambda i: i * (x / (qq_bg.size[0] - 1)) * (1 - (y / (qq_bg.size[1] - 1))), background.get_at((x, y)))))
+
+
+for x in range(icon.size[0]):
+    for y in range(icon.size[1]):
+        icon.set_at((x, y), tuple(map(lambda i: i * (x / (icon.size[0] - 1)) * (1 - (y / (icon.size[1] - 1))), background.get_at((x, y)))))
+
+
+icon.blit(pygame.transform.scale(pygame.image.load("icon.png"), (360, 360)), (45, 45))
+qq_bg.blit(pygame.image.load("Asset/image/logo.png"), ((qq_bg.size[0] - 560) // 2, (qq_bg.size[1] - 64) // 2))
+
+pygame.image.save(qq_bg, "dist/background.png")
+pygame.image.save(icon, "dist/qq_icon.png")
+
+
 for x in range(root.size[0]):
     for y in range(root.size[1]):
         root.set_at((x, y), tuple(map(lambda i: i * (x / (root.size[0] - 1)) * (1 - (y / (root.size[1] - 1))), background.get_at((x + 20, y)))))
@@ -51,6 +71,7 @@ root.blit(pygame.image.load("Asset/image/logo.png"), ((root.size[0] - 560) // 2,
 root.blit(text_surf, (40 - offset[0], root.size[1] - 40 - offset[1]))
 
 pygame.image.save(root, "dist/boot.png")
+
 
 
 

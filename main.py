@@ -122,7 +122,7 @@ def asset_load() -> None:
         logger.debug("Set Pygame Max Channels...")
         pygame.mixer.set_num_channels(global_info["setting"]["channels_num"])
 
-        logger.debug("Features Files...")
+        logger.debug("Loading Features Files...")
         with open("Asset/text/features.json", "rb") as _io:
             global_asset["features"] = json.loads(_io.read())
 
@@ -172,9 +172,15 @@ def asset_load() -> None:
             time.sleep(0.5)
 
         remove_page(overlay_page)
+
+        if global_info["convertor"]["file"]:
+            add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0, 0, 0]}], 1, False)
+            add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}], 1)
+        else:
+            while overlay_page: pass
+            add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0, 0, 0]}], 0, False)
+
         global_info["message_info"][2] = True
-        add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0, 0, 0]}], 0, False)
-        if global_info["convertor"]["file"]: add_page(overlay_page, [convertor_screen, {"button_state": [0, 0, 0, 0, 0]}])
     except:
         global_info["exit"] = 3
         logger.error(traceback.format_exc())
@@ -794,11 +800,14 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
                 _overlay[_n][2] += (-0.1 - _overlay[_n][2]) * global_info["animation_speed"]
         except KeyboardInterrupt:
             raise KeyboardInterrupt
-        except:
-            global_info["message"].append("MMS-UI错误，请将log.txt发送给开发者以修复问题！")
-            logger.error(traceback.format_exc())
-            del _overlay[_n:]
-            return
+        except Exception as _exception:
+            if sum(1 for _i in _overlay if _i[3]) > 1:
+                global_info["message"].append("MMS-UI错误，请将log.txt发送给开发者以修复问题！")
+                logger.error(traceback.format_exc())
+                del _overlay[_n:]
+                return
+            else:
+                raise _exception
 
         if _overlay[_n][2] == 1: break
         elif _overlay[_n][2] <= 0: del _overlay[_n]
@@ -900,9 +909,9 @@ def show_download(_title: str, _url: str, _target_path, _callback=lambda: remove
     threading.Thread(target=download, args=(_url, _state, _target_path, _callback), daemon=True).start()
     add_page(overlay_page, [download_screen, {"state": _state, "title": _title}])
 
-def reboot_to_update():
-    shutil.unpack_archive("Asset/updater/package.tar.zst", "Updater")
-    global_info["exit"] = 2
+def reboot(_code: int = 2):
+    if _code == 2: shutil.unpack_archive("Asset/updater/package.tar.zst", "Updater")
+    global_info["exit"] = _code
 
 def install_editor():
     try:
@@ -1094,6 +1103,8 @@ def get_version_list():
                     global_info["mcpack_update"][1] = _i["download_url"]
                 case 6:
                     global_info["sounds_update"] = _i
+                case 7:
+                    global_info["links"][_i["type"]] = _i["url"]
                 case _:
                     logger.debug("Unknown API Version: " + str(_i["API"]))
 
@@ -1121,8 +1132,8 @@ def download(_url, _state, _target_path, _callback):
         with tarfile.open(fileobj=_state["buffer"], mode="r|zst") as _io:
             _io.extractall(_target_path)
 
-        _state["state"] = 1
         _callback()
+        _state["state"] = 1
     except Exception as _exception:
         logger.error(traceback.format_exc())
 
@@ -1150,6 +1161,19 @@ def downloader(_url, _buffer: NetBuffer):
         _buffer.set_exception(_exception)
     finally:
         _buffer.set_done()
+
+def unpack(_path: str, _ask: bool = False):
+    try:
+        if _ask:
+            global_info["message"].append("正在解压软件包...")
+            shutil.unpack_archive("Asset/updater/package.tar.zst", "Updater")
+            shutil.unpack_archive(_path, "Update")
+            global_info["exit"] = 2
+        else:
+            add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["安装", "取消"], "argument": (_path, True), "callback": unpack, "content": "是否将以下文件作为软件安装包安装？\n" + os.path.basename(_path)}], 0, True)
+    except:
+        logger.error(traceback.format_exc())
+        global_info["message"].append("无法解压软件包！")
 
 def update_mcpack():
     try:
@@ -1190,6 +1214,9 @@ def loading_screen(_info, _input) -> pygame.Surface:
     return _surf
 
 def menu_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["退出", "取消"], "argument": [1], "callback": reboot, "content": "退出软件？"}], 0, True)
+
     if "drop_file" in _input:
         match os.path.splitext(_input["drop_file"])[1]:
             case ".mid":
@@ -1197,8 +1224,10 @@ def menu_screen(_info, _input):
                 global_info["convertor"]["file"] = _input["drop_file"]
             case ".mspf":
                 threading.Thread(target=enter_to_editor, args=[_input["drop_file"]], daemon=True).start()
-            case _i if _i in (".jpeg", ".jpg", ".png"):
+            case _i if _i.lower() in (".jpeg", ".jpg", ".png"):
                 threading.Thread(target=produce_background, args=[_input["drop_file"]], daemon=True).start()
+            case _i if _i.lower() in (".zst", ".xz", ".gz", ".zip"):
+                threading.Thread(target=unpack, args=[_input["drop_file"]], daemon=True).start()
             case _:
                 global_info["message"].append("不支持的文件 " + os.path.basename(_input["drop_file"]))
 
@@ -1230,7 +1259,7 @@ def menu_screen(_info, _input):
                     _edition = "Unknown"
                 if global_info["setting"]["edition"]:
                     _edition += "-" + str(global_info["setting"]["edition"])
-                add_page(overlay_page, [about_screen, {"edition": _edition, "button_state": [0, 0]}])
+                add_page(overlay_page, [about_screen, {"edition": _edition, "button_state": [0, 0, 0, 0]}])
 
     change_button_alpha(_info["button_state"], _id)
 
@@ -1262,6 +1291,7 @@ def player_screen(_info, _input):
 
     _text_surf1 = global_asset["font"].render(_info["lyrics"][0], True, global_info["color"])
     _text_surf2 = global_asset["font"].render(_info["lyrics"][1], True, (255, 255, 255))
+    if global_info["color"] == (255, 255, 255): _text_surf2.set_alpha(127)
 
     _text_width = _text_surf1.size[0] + _text_surf2.size[0]
 
@@ -1444,6 +1474,15 @@ def software_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
 
+    if "drop_file" in _input:
+        match os.path.splitext(_input["drop_file"])[1]:
+            case ".mspf":
+                threading.Thread(target=enter_to_editor, args=[_input["drop_file"]], daemon=True).start()
+            case _i if _i.lower() in (".jpeg", ".jpg", ".png"):
+                threading.Thread(target=produce_background, args=[_input["drop_file"]], daemon=True).start()
+            case _:
+                global_info["message"].append("不支持的文件 " + os.path.basename(_input["drop_file"]))
+
     match global_info["setting"]["log_level"]:
         case 0:
             _text = "DISABLE"
@@ -1490,6 +1529,13 @@ def software_setting_screen(_info, _input):
 def custom_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
+
+    if "drop_file" in _input:
+        match os.path.splitext(_input["drop_file"])[1]:
+            case _i if _i.lower() in (".jpeg", ".jpg", ".png"):
+                threading.Thread(target=produce_background, args=[_input["drop_file"]], daemon=True).start()
+            case _:
+                global_info["message"].append("不支持的文件 " + os.path.basename(_input["drop_file"]))
 
     _root, _id = ui_manager.apply_ui(
         (
@@ -1547,6 +1593,13 @@ def version_list_screen(_info, _input):
         global_info["new_version"] = ""
         remove_page(overlay_page)
 
+    if "drop_file" in _input:
+        match os.path.splitext(_input["drop_file"])[1]:
+            case _i if _i.lower() in (".zst", ".xz", ".gz", ".zip"):
+                threading.Thread(target=unpack, args=[_input["drop_file"]], daemon=True).start()
+            case _:
+                global_info["message"].append("不支持的文件 " + os.path.basename(_input["drop_file"]))
+
     if global_info["update_list"][1]:
         _ver_list = _info["edition_info"][1][_info["edition_info"][0][_info["tag_index"]]]
 
@@ -1580,7 +1633,7 @@ def version_list_screen(_info, _input):
                     _info["size"][3] = "--"
                     _info["size"][1] = " V" + str(_ver_info["version"]) + "-" + str(_ver_info["edition"])
                     threading.Thread(target=get_resource_size, args=(_ver_info["download_url"], _info["size"]), daemon=True).start()
-                    add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": (("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]), _ver_info["download_url"], "Update", reboot_to_update), "callback": show_download, "content": _info["size"]}], 0, True)
+                    add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": (("V" + str(global_info["setting"]["version"]) + "  ➡  " if global_info["setting"]["version"] else "") + "V" + str(_ver_info["version"]), _ver_info["download_url"], "Update", reboot), "callback": show_download, "content": _info["size"]}], 0, True)
                 case 4:
                     _info["index"] = 0
                     _info["tag_index"] += 1
@@ -1605,16 +1658,19 @@ def about_screen(_info, _input):
             (0.025, 0.044, 0.95, 0.267, ("", 0, 0), -1),
             (0.025, 0.267, 0.95, 0, (_info["edition"], 0.035, 255), -1),
             (0.025, 0.356, 0.463, 0.1, ("QQ 交流群", 0.035, _info["button_state"][0]), 0),
-            (0.513, 0.356, 0.463, 0.1, ("Gitee 开源仓库", 0.035, _info["button_state"][1]), 1)
+            (0.513, 0.356, 0.463, 0.1, ("Gitee 开源仓库", 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.489, 0.463, 0.1, ("音域扩展包下载", 0.035, _info["button_state"][2]), 2),
+            (0.513, 0.489, 0.463, 0.1, ("MMS播放器下载", 0.035, _info["button_state"][3]), 3)
         ),
         pygame.mouse.get_pos()
     )
 
     if "mouse_left" in _input and not _input["mouse_left"]:
-        if _id == 0:
-            add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["在浏览器中查看", "好的"], "argument": (), "callback": lambda: webbrowser.open("qm.qq.com/q/9oBhTyDN8k"), "content": "密码\n14890357"}], 0, True)
-        elif _id == 1:
-            webbrowser.open("gitee.com/mrdxhmagic/midi-mcstructure_next")
+        match _id:
+            case 0: add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["在浏览器中查看", "好的"], "argument": (), "callback": lambda: webbrowser.open(global_info["links"]["qq"]), "content": "群号：574931138\n密码：14890357"}], 0, True)
+            case 1: webbrowser.open(global_info["links"]["mms"])
+            case 2: webbrowser.open(global_info["links"]["sound_extension"])
+            case 3: webbrowser.open(global_info["links"]["player"])
 
     change_button_alpha(_info["button_state"], _id)
 
@@ -1782,6 +1838,7 @@ def setting_screen(_info, _input):
                         global_info["convertor"]["command_type"] = 1
                 elif global_info["convertor"]["output_format"] == 2:
                     global_info["convertor"]["command_type"] = 0
+                    global_info["message"].append("目标游戏存档需要安装MMS播放器行为包（关于页面下载）！")
             case 1:
                 if global_info["convertor"]["output_format"] != 2:
                     global_info["convertor"]["command_type"] += 1
@@ -1831,7 +1888,7 @@ def advanced_setting_screen(_info, _input):
                     if global_info["convertor"]["edition"] == 0:
                         global_info["message"].append("基岩版无需开启，此功能是为Java版设计！")
                     else:
-                        global_info["message"].append("目标游戏存档需要安装MMS音域扩展资源包！")
+                        global_info["message"].append("目标游戏存档需要安装MMS音域扩展资源包（关于页面下载）！")
             case 6:
                 if global_info["convertor"]["command_type"] != 0 and not (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0):
                     global_info["convertor"]["compression"] = not global_info["convertor"]["compression"]
@@ -2022,7 +2079,14 @@ def asking_screen(_info, _input):
 
     return _root
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "channels_num": 32, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
+
+if base_path := os.path.abspath(getattr(sys, "_MEIPASS", None)):
+    if os.path.basename(base_path) == "_internal":
+        os.chdir(os.path.dirname(base_path))
+    else:
+        os.chdir(base_path)
+
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-wiQg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "channels_num": 32, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

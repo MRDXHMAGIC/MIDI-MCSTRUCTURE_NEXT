@@ -181,7 +181,7 @@ class MIDIReader:
                 # 获取通道音色事件
                 elif _message.type == "program_change":
                     # 记录乐器代号
-                    _channel_info[_channel]["program"].add_info(_time, _mapping.get(_message.program, _message.program))
+                    _channel_info[_channel]["program"].add_info(_time, _message.program)
                 # 获取歌词事件
                 elif _message.type == "lyrics":
                     # 获取歌词数据
@@ -204,7 +204,7 @@ class MIDIReader:
                         _note_program = _mapping.get(_message.note, _message.note)
                     else:
                         _note_pitch = _message.note
-                        _note_program = _channel_info[_channel]["program"].match_info(_time)
+                        _note_program = _mapping.get(_channel_info[_channel]["program"].match_info(_time), _channel_info[_channel]["program"].match_info(_time))
 
                     # 打包数据
                     _stack.put(_channel, NoteData(_tempo_info.compute_time(_time), _note_pitch, _note_program, _note_panning, _note_velocity))
