@@ -1,8 +1,8 @@
 {
   "id": 1,
   "fps": 60,
-  "version": 19260217,
-  "edition": "Prerelease",
+  "version": 19260221,
+  "edition": "Release",
   "log_level": 5,
   "ask_mapping": true,
   "channels_num": 64,

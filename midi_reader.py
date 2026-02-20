@@ -1,7 +1,7 @@
 import math
 import mido
 from tools import round_int, round_45
-from database import InfoList, Stack, NoteData
+from database import InfoList, Stack, NoteData, LyricsData
 
 class TempoList:
     def __init__(self, _ticks_per_beat: int) -> None:
@@ -185,10 +185,7 @@ class MIDIReader:
                 # 获取歌词事件
                 elif _message.type == "lyrics":
                     # 获取歌词数据
-                    _data = {
-                        "type": "text",
-                        "text": _message.text
-                    }
+                    _data = LyricsData(_message.text)
                 # 获取音符信息
                 elif _message.type == "note_on" and _message.velocity != 0:
                     # 对音符力度（音量）进行归一化处理
@@ -215,4 +212,4 @@ class MIDIReader:
                 # 将音符时间转为游戏tick时间并返回结果
                 if _data is not None: yield _tempo_info.compute_time(_time), _data
 
-        for _data in _stack: yield None, _data
+        for _data in _stack: yield _data.time + 0.00001, _data

@@ -47,22 +47,22 @@
         ["basedrum", 1.5, 0, 0]
       ],
       "cymbal": [
-        ["sand", 1.0, 19, 0]
+        ["extinguish", 1.0, 19, 0]
       ],
       "open_cymbal": [
-        ["sand", 1.5, 19, 0]
+        ["extinguish", 1.5, 19, 0]
       ],
       "pedal_cymbal": [
-        ["sand", 1.5, 31, 0]
+        ["extinguish", 1.5, 31, 0]
       ],
       "closed_cymbal": [
-        ["sand", 1.5, 38, 0]
+        ["extinguish", 1.5, 38, 0]
       ],
       "cabasa": [
-        ["sand", 1.2, 19, 0]
+        ["extinguish", 1.2, 19, 0]
       ],
       "shaker": [
-        ["sand", 1.2, 31, 0]
+        ["extinguish", 1.2, 31, 0]
       ],
       "telephone_ring": [
         ["bit", 2.0, 6, 0],
@@ -80,6 +80,19 @@
       ],
       "trumpet": [
         ["trumpet", 0.7, 0, 0]
+      ],
+      "orchestra_hit": [
+        ["bass", 0.4, 0, 0],
+        ["flute", 0.3, 0, 0]
+      ],
+      "crystal": [
+        ["amethyst", 2.0, 0, 0]
+      ],
+      "rain": [
+        ["rain", 1.0, 0, 0]
+      ],
+      "gun": [
+        ["gun", 1.0, 0, 0]
       ]
     }
   },
@@ -113,7 +126,7 @@
       }
     },
     "sound_extension": [
-      [[0.0, 100.0], "{SOUND}", 1.0]
+      [[0.0, 1000.0], "{SOUND}", 1.0]
     ],
     "sound_list": {
       "harp": [
@@ -211,6 +224,16 @@
       ],
       "trumpet": [
         ["note.trumpet", 0.7, 0, 0]
+      ],
+      "orchestra_hit": [
+        ["note.bass", 0.4, 0, 0],
+        ["note.flute", 0.3, 0, 0]
+      ],
+      "crystal": [
+        ["chime.amethyst_block", 2.0, 0, 0]
+      ],
+      "gun": [
+        ["random.explode", 1.0, 0, 0]
       ]
     }
   },
@@ -346,6 +369,16 @@
       ],
       "trumpet": [
         ["block.note_block.trumpet", 0.7, 0, 0]
+      ],
+      "orchestra_hit": [
+        ["block.note_block.bass", 0.4, 0, 0],
+        ["block.note_block.flute", 0.3, 0, 0]
+      ],
+      "crystal": [
+        ["block.amethyst_block.chime", 2.0, 0, 0]
+      ],
+      "gun": [
+        ["entity.generic.explode", 1.0, 0, 0]
       ]
     }
   },
@@ -379,7 +412,7 @@
       }
     },
     "sound_extension": [
-      [[0.5, 2.0], "{SOUND}", 1.0]
+      [[0.0, 1000.0], "{SOUND}", 1.0]
     ],
     "sound_list": {
       "harp": [
@@ -463,6 +496,13 @@
       ],
       "didgeridoo": [
         ["note.didgeridoo", 0.8, 0, 0]
+      ],
+      "orchestra_hit": [
+        ["note.bass", 0.4, 0, 0],
+        ["note.flute", 0.3, 0, 0]
+      ],
+      "gun": [
+        ["random.explode", 1.0, 0, 0]
       ]
     }
   },
@@ -566,6 +606,10 @@
         ["block.note.harp", 2.0, -6, 50],
         ["block.note.harp", 2.0, 6, 50],
         ["block.note.harp", 2.0, -6, 50]
+      ],
+      "orchestra_hit": [
+        ["block.note.bass", 0.4, 0, 0],
+        ["block.note.flute", 0.3, 0, 0]
       ]
     }
   }

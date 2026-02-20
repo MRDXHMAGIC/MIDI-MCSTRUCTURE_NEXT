@@ -567,6 +567,8 @@ def convertor(_setting, _task_id):
                                     if _sound := _sound_list[_program].get(_pitch, None):
                                         _sound.set_volume(_volume)
                                         _sound.play()
+                                    else:
+                                        logger.debug("Cannot Found Sound: " + str(_program))
                                 case {"type": "lyrics", "last": _last, "real_f": _rf, "real_s": _rs, "next": _next}:
                                     _setting["player_info"]["lyrics"] = (_rf, _rs)
                                 case _:
@@ -576,6 +578,7 @@ def convertor(_setting, _task_id):
     except:
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         logger.error(traceback.format_exc())
+        raise
     finally:
         if _setting["output_format"] != 3: remove_page(overlay_page)
 
@@ -601,7 +604,7 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
             if _program is None: continue
 
             _delay_time = 0
-            while _data.time + _delay_time < (_time if _time is not None else _data.time + 0.01):
+            while _data.time + _delay_time < _time:
                 # 一个音符可以对应多个我的世界乐器，因此这里遍历一下从配置文件中获取的数据
                 for _note in _program:
                     # 累加配置文件中我的世界乐器之间的时间间隔
