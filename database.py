@@ -1,7 +1,9 @@
 from tools import limit, round_45
+from threading import Lock
 
 class Note:
     __slots__ = (
+        "__id",
         "__program",
         "__pitch",
         "__volume",
@@ -9,7 +11,7 @@ class Note:
     )
 
     master_volume = 1
-    def __init__(self, _program: str, _volume: float, _pitch: float, _panning: tuple[float]):
+    def __init__(self, _program: str, _volume: float, _pitch: float, _panning: tuple[float], _id = None):
         if not isinstance(_panning, (tuple, list)): raise TypeError("Panning must be tuple!")
         if not isinstance(_program, str): raise TypeError("Program must be string!")
         if not isinstance(_volume, (float, int)): raise TypeError("Volume must be float!")
@@ -17,6 +19,7 @@ class Note:
 
         self.__program = _program
 
+        self.__id = _id
         self.__pitch = round_45(_pitch, 5)
         self.__volume = round_45(_volume, 2)
         self.__panning = (round_45(_panning[0], 2), round_45(_panning[1], 2))
@@ -46,6 +49,7 @@ class Note:
     def __hash__(self) -> int:
         return hash(
             (
+                self.__id,
                 self.__pitch,
                 self.__volume,
                 self.__program,

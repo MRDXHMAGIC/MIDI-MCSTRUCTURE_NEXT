@@ -241,123 +241,154 @@ def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
     return _sound_list
 
 # MIDI转换
-def convertor(_setting, _task_id):
+def repack_note(_note: Note, _id = None) -> Note:
+    _data = _note.dump()
+    return Note(_data["program"], _data["volume"], _data["pitch"], _data["panning"], _id)
+
+def read_midi(_setting: dict, _profile: dict) -> dict:
+    with open(_setting["file"], "rb") as _io:
+        _path_hash = str(hashlib.file_digest(_io, "md5").hexdigest())
+
+    _midi_reader = MIDIReader(_setting["file"])
+
+    if not os.path.exists("Cache/mapping"): os.makedirs("Cache/mapping")
+
     try:
-        # 根据设置的游戏版本选择合适的配置文件
-        if  _setting["output_format"] == 3:
-            _profile = global_asset["profile"]["midi_preview"]
-        elif global_info["convertor"]["edition"] == 0:
-            if global_info["convertor"]["version"] == 0:
-                _profile = global_asset["profile"]["old_bedrock"]
-            elif global_info["convertor"]["version"] == 1:
-                _profile = global_asset["profile"]["new_bedrock"]
-        elif global_info["convertor"]["edition"] == 1:
-            if global_info["convertor"]["version"] == 0:
-                _profile = global_asset["profile"]["old_java"]
-            elif global_info["convertor"]["version"] == 1:
-                _profile = global_asset["profile"]["new_java"]
+        with open("Cache/mapping/" + _path_hash + ".pkl", "rb") as _io:
+            _mapping = pickle.load(_io)
+        if _setting["ask_mapping"]: global_info["message"].append("请调整乐器音色映射方案（已加载缓存方案）")
+    except:
+        logger.debug(traceback.format_exc())
+        _mapping = {}
+        if _setting["ask_mapping"]: global_info["message"].append("请调整乐器音色映射方案")
 
-        with open(_setting["file"], "rb") as _io:
-            _path_hash = str(hashlib.file_digest(_io, "md5").hexdigest())
+    if _setting["ask_mapping"]:
+        _instruments = _midi_reader.scan_instruments()
 
-        _midi_reader = MIDIReader(_setting["file"])
+        _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0,
+                 "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": [False]}
+        add_page(overlay_page, [adj_mapping_screen, _info])
 
-        if not os.path.exists("Cache/mapping"): os.makedirs("Cache/mapping")
+        while not _info["done"][0]:
+            time.sleep(0.1)
 
         try:
-            with open("Cache/mapping/" + _path_hash + ".pkl", "rb") as _io:
-                _mapping = pickle.load(_io)
-            if _setting["ask_mapping"]: global_info["message"].append("请调整乐器音色映射方案（已加载缓存方案）")
+            with open("Cache/mapping/" + _path_hash + ".pkl", "wb") as _io:
+                pickle.dump(_mapping, _io, protocol=5)
         except:
             logger.debug(traceback.format_exc())
-            _mapping = {}
-            if _setting["ask_mapping"]: global_info["message"].append("请调整乐器音色映射方案")
 
-        if _setting["ask_mapping"]:
-            _instruments = _midi_reader.scan_instruments()
+    _midi_reader.override_mapping(_mapping)
 
-            _info = {"button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0], "index": 0, "channel_index": 0, "channels": sorted(_instruments.keys()), "data": _instruments, "mapping": _mapping, "done": [False]}
-            add_page(overlay_page, [adj_mapping_screen, _info])
+    if _setting["enable_accurate_tick"]:
+        _setting["time_per_tick"] = min(
+            ((_n, _midi_reader.get_time_accuracy(_n / 10)) for _n in
+             range((_setting["time_per_tick"] - _setting["max_time_error"]) * 10,
+                   1 + (_setting["time_per_tick"] + _setting["max_time_error"]) * 10)),
+            key=lambda _i: _i[1]
+        )[0] / 10
+        logger.debug(f"The best speed is {_setting["time_per_tick"]} ms/tick")
 
-            while not _info["done"][0]:
-                time.sleep(0.1)
+    # 存放音符和歌词字幕合并后的最终结果
+    _result: dict[int, set[Note | Lyrics]] = {}
 
-            try:
-                with open("Cache/mapping/" + _path_hash + ".pkl", "wb") as _io:
-                    pickle.dump(_mapping, _io, protocol=5)
-            except:
-                logger.debug(traceback.format_exc())
+    # 调整平均音量，音符数据取整，最终合并到结果中
+    _lyrics_buffer: dict[int, str] = {}
+    _average_volume = [0, 0]
+    for _k, _i in get_notes(_midi_reader, _setting, _profile):
+        if isinstance(_i, Note):
+            # 如果启用控制平均音量功能，就记录音量信息
+            if _setting["volume"]:
+                _average_volume[0] += 1
+                _average_volume[1] += _i.dump()["volume"]
 
-        _midi_reader.override_mapping(_mapping)
+            # 将音符数据合并到结果中
+            if _k not in _result:
+                _result[_k] = set()
 
-        if _setting["enable_accurate_tick"]:
-            _setting["time_per_tick"] = min(
-                ((_n, _midi_reader.get_time_accuracy(_n / 10)) for _n in range((_setting["time_per_tick"] - _setting["max_time_error"]) * 10, 1 + (_setting["time_per_tick"] + _setting["max_time_error"]) * 10)),
-                key=lambda _i: _i[1]
-            )[0] / 10
-            logger.debug(f"The best speed is {_setting["time_per_tick"]} ms/tick")
+            if _setting["remove_chord"]:
+                _result[_k].add(_i)
+            else:
+                _note_id = 0
+                while repack_note(_i, _note_id) in _result[_k]:
+                    _note_id += 1
+                else:
+                    _result[_k].add(repack_note(_i, _note_id))
 
-        # 存放音符和歌词字幕合并后的最终结果
-        _result: dict[int, set[Note | Lyrics]] = {}
+        elif isinstance(_i, str):
+            if _k not in _lyrics_buffer:
+                _lyrics_buffer[_k] = ""
+            _lyrics_buffer[_k] += _i
 
-        # 调整平均音量，音符数据取整，最终合并到结果中
-        _lyrics_buffer: dict[int, str] = {}
-        _average_volume = [0, 0]
-        for _k, _i in get_notes(_midi_reader, _setting, _profile):
-            if isinstance(_i, Note):
-                # 如果启用控制平均音量功能，就记录音量信息
-                if _setting["volume"]:
-                    _average_volume[0] += 1
-                    _average_volume[1] += _i.dump()["volume"]
+        else:
+            raise TypeError("Unknown Data Type: " + str(type(_i)))
 
-                # 将音符数据合并到结果中
+    if _average_volume[0] and _average_volume[1]:
+        Note.master_volume = (_setting["volume"] / 100) / (_average_volume[1] / _average_volume[0])
+    else:
+        Note.master_volume = 1
+
+    # 歌词数据处理
+    if _setting["lyrics"]["enable"]:
+        if os.path.exists(os.path.splitext(_setting["file"])[0] + ".lrc"):
+            logger.info("Find LRC File: " + os.path.splitext(_setting["file"])[0] + ".lrc")
+
+            for _charset in ("utf-8", "ANSI"):
+                try:
+                    with open(os.path.splitext(_setting["file"])[0] + ".lrc", "r", encoding=_charset) as _io:
+                        _lyrics_buffer.clear()
+                        for _k, _i in load_lrc(_io.readlines(), _setting["time_per_tick"]):
+                            _lyrics_buffer[_k] = _i
+                    break
+                except:
+                    pass
+            else:
+                raise IOError("Cannot read .lrc file!")
+        # 渲染歌词字幕
+        if _lyrics_buffer:
+            _last_l = None
+            for _k, _l in LyricsList(_lyrics_buffer, _setting["lyrics"]["smooth"], _setting["lyrics"]["joining"]):
+                # 判断与上个歌词显示内容是否不同
+                if _last_l == _l and _setting["compression"] == 1:
+                    continue
+                # 将歌词数据合并到结果中
                 if _k not in _result:
                     _result[_k] = set()
 
-                _result[_k].add(_i)
+                _result[_k].add(_l)
+                _last_l = _l
 
-            elif isinstance(_i, str):
-                if _k not in _lyrics_buffer:
-                    _lyrics_buffer[_k] = ""
-                _lyrics_buffer[_k] += _i
+    return _result
 
-            else:
-                raise TypeError("Unknown Data Type: " + str(type(_i)))
+def get_profile(_setting) -> dict:
+    _profile = None
 
-        if _average_volume[0] and _average_volume[1]:
-            Note.master_volume = (_setting["volume"] / 100) / (_average_volume[1] / _average_volume[0])
-        else:
-            Note.master_volume = 1
+    if _setting["output_format"] == 3:
+        _profile = global_asset["profile"]["midi_preview"]
+    elif global_info["convertor"]["edition"] == 0:
+        if global_info["convertor"]["version"] == 0:
+            _profile = global_asset["profile"]["old_bedrock"]
+        elif global_info["convertor"]["version"] == 1:
+            _profile = global_asset["profile"]["new_bedrock"]
+    elif global_info["convertor"]["edition"] == 1:
+        if global_info["convertor"]["version"] == 0:
+            _profile = global_asset["profile"]["old_java"]
+        elif global_info["convertor"]["version"] == 1:
+            _profile = global_asset["profile"]["new_java"]
 
-        # 歌词数据处理
-        if _setting["lyrics"]["enable"]:
-            if os.path.exists(os.path.splitext(_setting["file"])[0] + ".lrc"):
-                logger.info("Find LRC File: " + os.path.splitext(_setting["file"])[0] + ".lrc")
+    return _profile
 
-                for _charset in ("utf-8", "ANSI"):
-                    try:
-                        with open(os.path.splitext(_setting["file"])[0] + ".lrc", "r", encoding=_charset) as _io:
-                            _lyrics_buffer.clear()
-                            for _k, _i in load_lrc(_io.readlines(), _setting["time_per_tick"]):
-                                _lyrics_buffer[_k] = _i
-                        break
-                    except:
-                        pass
-                else:
-                    raise IOError("Cannot read .lrc file!")
-            # 渲染歌词字幕
-            if _lyrics_buffer:
-                _last_l = None
-                for _k, _l in LyricsList(_lyrics_buffer, _setting["lyrics"]["smooth"], _setting["lyrics"]["joining"]):
-                    # 判断与上个歌词显示内容是否不同
-                    if _last_l == _l and _setting["compression"] == 1:
-                        continue
-                    # 将歌词数据合并到结果中
-                    if _k not in _result:
-                        _result[_k] = set()
+def convertor(_setting, _task_id = None):
+    try:
+        if _task_id is None: _task_id = 0
 
-                    _result[_k].add(_l)
-                    _last_l = _l
+        _setting["remove_chord"] = global_info["setting"]["remove_chord"]
+
+        # 根据设置的游戏版本选择合适的配置文件
+        _profile = get_profile(_setting)
+
+        # 读取MIDI音乐
+        _result = read_midi(_setting, _profile)
 
         # 获取最早的数据的时间，用于跳过静音功能
         if _setting["skip"]:
@@ -377,9 +408,9 @@ def convertor(_setting, _task_id):
             _crc, _buffer = write_cmd(
                 {
                     "structure": "Asset/mcstructure/" + global_asset["structure"][_setting["structure"]],
-                    "cmd_list": ((_cmd[0], _cmd[1].replace("{ADDRESS}", "0" if _task_id is None else str(_task_id))) for _cmd in cmd_convertor(_setting, _profile, _time_offset, _result)),
+                    "cmd_list": ((_cmd[0], _cmd[1].replace("{ADDRESS}", str(_task_id))) for _cmd in cmd_convertor(_setting, _profile, _time_offset, _result)),
                     "map": (
-                        ("__ADDRESS__", "0" if _task_id is None else str(_task_id)),
+                        ("__ADDRESS__", str(_task_id)),
                         ("__TOTAL__", str(max(_result.keys()))),
                         ("__NAME__", _music_name)
                     )
@@ -399,7 +430,7 @@ def convertor(_setting, _task_id):
 
             with open("Cache/convertor/function.mcfunction", "w", encoding="utf-8") as _io:
                 for _, _cmd in cmd_convertor(_setting, _profile, _time_offset, _result):
-                    _io.write(f"{_cmd.replace("{ADDRESS}", "0" if _task_id is None else str(_task_id))}\n")
+                    _io.write(f"{_cmd.replace("{ADDRESS}", str(_task_id))}\n")
 
             if _setting["edition"] == 0:
                 if not os.path.exists("Cache/output/functions") :os.makedirs("Cache/output/functions")
@@ -1261,7 +1292,7 @@ def menu_screen(_info, _input):
             case 1:
                 enter_to_player(False)
             case 2:
-                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0]}])
+                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0]}])
             case 3:
                 add_page(overlay_page, [version_list_screen, {"size": ["你是否要下载并安装", "该版本", "？\n该软件包大小为", "--", "MB"], "tag_index": 0, "index": 0, "edition_info": global_info["update_list"], "button_state": [0, 0, 0, 0, 0]}])
             case 4:
@@ -1513,11 +1544,12 @@ def software_setting_screen(_info, _input):
 
     _root, _id = ui_manager.apply_ui(
         (
-            (0.025, 0.044, 0.95, 0.089, ("MMS指令编辑器", 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.044, 0.95, 0.089, ("编辑指令模板", 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, ("指令压缩设置", 0.035, _info["button_state"][1]), 1),
-            (0.025, 0.311, 0.95, 0.089, ("个性化设置", 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.444, 0.95, 0.089, ("询问映射关系 " + ("是" if global_info["setting"]["ask_mapping"] else "不"), 0.035, _info["button_state"][3]), 3),
-            (0.025, 0.578, 0.95, 0.089, ("日志等级 " + _text, 0.035, _info["button_state"][4]), 4)
+            (0.025, 0.311, 0.95, 0.089, ("软件个性设置", 0.035, _info["button_state"][2]), 2),
+            (0.025, 0.444, 0.95, 0.089, ("移除重复音符 " + ("是" if global_info["setting"]["remove_chord"] else "不"), 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.578, 0.95, 0.089, ("询问映射关系 " + ("是" if global_info["setting"]["ask_mapping"] else "不"), 0.035, _info["button_state"][4]), 4),
+            (0.025, 0.711, 0.95, 0.089, ("软件日志等级 " + _text, 0.035, _info["button_state"][5]), 5)
         ),
         pygame.mouse.get_pos()
     )
@@ -1527,8 +1559,9 @@ def software_setting_screen(_info, _input):
             case 0: threading.Thread(target=enter_to_editor, daemon=True).start()
             case 1: add_page(overlay_page, [compression_setting_screen, {"button_state": [0, 0]}])
             case 2: add_page(overlay_page, [custom_setting_screen, {"button_state": [0, 0, 0]}])
-            case 3: global_info["setting"]["ask_mapping"] = not global_info["setting"]["ask_mapping"]
-            case 4:
+            case 3: global_info["setting"]["remove_chord"] = not global_info["setting"]["remove_chord"]
+            case 4: global_info["setting"]["ask_mapping"] = not global_info["setting"]["ask_mapping"]
+            case 5:
                 global_info["setting"]["log_level"] += 1
                 if global_info["setting"]["log_level"] >= 6:
                     global_info["setting"]["log_level"] = 0
@@ -2098,7 +2131,7 @@ if base_path := getattr(sys, "_MEIPASS", None):
     else:
         os.chdir(base_path)
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-wiQg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "channels_num": 32, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-wiQg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "remove_chord": True, "channels_num": 32, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

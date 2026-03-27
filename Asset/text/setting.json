@@ -5,6 +5,7 @@
   "edition": "Release",
   "log_level": 5,
   "ask_mapping": true,
+  "remove_chord": false,
   "channels_num": 64,
   "animation_speed": 10,
   "max_selector_num": 8,
