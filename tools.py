@@ -1,4 +1,22 @@
+import os
 import random
+import shutil
+import subprocess
+
+def where_ffmpeg() -> str:
+    try:
+        if _path := shutil.which("ffmpeg"):
+            _result = subprocess.run((_path, "-version"), capture_output=True, text=True, timeout=8, check=True)
+
+            if _result.stdout.startswith("ffmpeg version"):
+                return _path
+    except:
+        pass
+
+    if os.path.exists("FFmpeg/ffmpeg.exe"):
+        return os.path.abspath("Ffmpeg/ffmpeg.exe")
+    else:
+        return None
 
 def get_color(_surf) -> tuple[int]:
     _colors = []

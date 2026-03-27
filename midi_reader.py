@@ -198,13 +198,13 @@ class MIDIReader:
                     if _channel == 9:
                         # 打击乐器保持原声
                         _note_pitch = 66
-                        _note_program = _mapping.get(_message.note, _message.note)
+                        _note_program = _message.note
                     else:
                         _note_pitch = _message.note
-                        _note_program = _mapping.get(_channel_info[_channel]["program"].match_info(_time), _channel_info[_channel]["program"].match_info(_time))
+                        _note_program = _channel_info[_channel]["program"].match_info(_time)
 
                     # 打包数据
-                    _stack.put(_channel, NoteData(_tempo_info.compute_time(_time), _note_pitch, _note_program, _note_panning, _note_velocity))
+                    _stack.put(_channel, NoteData(_tempo_info.compute_time(_time), _note_pitch, (_mapping.get(_note_program, _note_program), _note_program), _note_panning, _note_velocity))
 
                 elif _message.type == "note_off" or (_message.type == "note_on" and _message.velocity == 0):
                     _data = _stack.get(_channel, _message.note)

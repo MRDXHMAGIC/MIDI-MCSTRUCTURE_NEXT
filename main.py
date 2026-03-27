@@ -242,9 +242,6 @@ def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
 
 # MIDI转换
 def convertor(_setting, _task_id):
-    # 添加正在处理页面
-    if _setting["output_format"] != 3: add_page(overlay_page, [processing_screen, {}])
-
     try:
         # 根据设置的游戏版本选择合适的配置文件
         if  _setting["output_format"] == 3:
@@ -306,7 +303,7 @@ def convertor(_setting, _task_id):
         # 调整平均音量，音符数据取整，最终合并到结果中
         _lyrics_buffer: dict[int, str] = {}
         _average_volume = [0, 0]
-        for _k, _i in filter(lambda _i: _setting["edition"] == 0 or _i[1].java_available(), get_notes(_midi_reader, _setting, _profile)):
+        for _k, _i in get_notes(_midi_reader, _setting, _profile):
             if isinstance(_i, Note):
                 # 如果启用控制平均音量功能，就记录音量信息
                 if _setting["volume"]:
@@ -579,10 +576,16 @@ def convertor(_setting, _task_id):
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         logger.error(traceback.format_exc())
         raise
-    finally:
-        if _setting["output_format"] != 3: remove_page(overlay_page)
 
 def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[int, Note | str]:
+    if not _setting["extension"]:
+        for _i in _profile["sound_extension"]:
+            if abs(_i[2] - 1) < 0.00001:
+                _sound_limit = _i
+                break
+        else:
+            raise ValueError("Cannot Found a Suitable Limit!")
+
     for _time, _data in _midi_file:
         if _data.type == "lyrics":
             # 返回文本数据
@@ -629,9 +632,10 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
                         else:
                             logger.warn("Can Not Found a Suitable Extension, Pitch=" + str(_pitch))
                             continue
+                    elif _sound_limit[0][0] <= _pitch <= _sound_limit[0][1]:
+                        _sound = _sound_limit[1].replace("{SOUND}", _note[0])
                     else:
-                        _sound = _note[0]
-
+                        break
                     # 返回音符数据
                     yield round_int((_data.time + _delay_time) / _setting["time_per_tick"]), Note(_sound, (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], _pitch, _data.panning)
 
@@ -640,9 +644,9 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
                 if not _setting["hold"]: break
 
                 if _data.percussion:
-                    if "hold" not in global_asset["features"]["percussion"].get(str(_data.program), global_asset["features"]["percussion"]["undefined"]): break
+                    if "hold" not in global_asset["features"]["percussion"].get(str(_data.source_program), global_asset["features"]["percussion"]["undefined"]): break
                 else:
-                    if "hold" not in global_asset["features"].get(str(_data.program), global_asset["features"]["undefined"]): break
+                    if "hold" not in global_asset["features"].get(str(_data.source_program), global_asset["features"]["undefined"]): break
 
                 _delay_time += _setting["time_per_tick"]
         else:
@@ -1061,7 +1065,14 @@ def start_task(_id: None | int = None) -> None:
         _argument["level"] = global_info["setting"]["compression_level"]
         _argument["ask_mapping"] = global_info["setting"]["ask_mapping"]
         _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
-        threading.Thread(target=convertor, args=(_argument, _id), daemon=True).start()
+        threading.Thread(target=run_task, args=(_argument, _id), daemon=True).start()
+
+def run_task(_args, _id):
+    add_page(overlay_page, [processing_screen, {}])
+    try:
+        convertor(_args, _id)
+    finally:
+        remove_page(overlay_page)
 
 def exit_mapping_screen(_info) -> None:
     _info[0] = 1
@@ -2160,7 +2171,7 @@ finally:
         io.write(json.dumps(global_info["setting"], indent=2))
 
     if global_info["exit"] == 2:
-        subprocess.Popen("Updater/updater.exe " + os.path.abspath(""))
+        subprocess.run(("Updater/updater.exe", os.path.abspath("")))
     elif global_info["exit"] == 3:
         window.blit(global_asset["error"], (0, 0))
         pygame.display.flip()

@@ -30,9 +30,6 @@ class Note:
             "volume": round_45(self.__volume * (1 if _origin else self.master_volume), 2)
         }
 
-    def java_available(self) -> bool:
-        return 0.5 <= self.__pitch <= 2.0
-
     def format(self, _text: str) -> str:
         if not isinstance(_text, str): raise TypeError("Text must be string!")
         
@@ -88,9 +85,6 @@ class Lyrics:
             "{NEXT}", self.__next
         )
 
-    def java_available(self) -> bool:
-        return True
-
     def dump(self, _) -> dict[str, str]:
         return {
             "type": "lyrics",
@@ -118,6 +112,7 @@ class Lyrics:
 
 class NoteData:
     __slots__ = (
+        "source_program",
         "percussion",
         "velocity",
         "panning",
@@ -127,14 +122,15 @@ class NoteData:
         "type"
     )
 
-    def __init__(self, _time: float, _pitch: float, _program: int, _panning: tuple[float], _velocity: float):
+    def __init__(self, _time: float, _pitch: float, _program: tuple[int], _panning: tuple[float], _velocity: float):
         self.type = "note"
         self.time = _time
         self.pitch = _pitch
-        self.program = _program
+        self.program = _program[0]
         self.panning = _panning
         self.velocity = _velocity
         self.percussion = False
+        self.source_program = _program[1]
 
 class LyricsData:
     __slots__ = (

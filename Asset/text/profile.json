@@ -1,5 +1,8 @@
 {
   "midi_preview": {
+    "sound_extension": [
+      [[0.0, 1000.0], "{SOUND}", 1.0]
+    ],
     "sound_list": {
       "harp": [
         ["harp", 0.53, 0, 0]
