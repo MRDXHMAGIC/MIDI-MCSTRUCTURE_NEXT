@@ -1,5 +1,10 @@
 [
   {
+    "API": 7,
+    "type": "sound_extension",
+    "url": "www.123865.com/s/se2RTd-goEg"
+  },
+  {
     "API": 6,
     "version": 3,
     "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V19260221-Release/sounds.tar.zst"
