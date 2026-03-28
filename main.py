@@ -9,15 +9,16 @@ import pygame
 import tarfile
 import hashlib
 import requests
+import evaltools
 import threading
 import traceback
 import subprocess
 import webbrowser
 from math import ceil
-from tools import round_int, round_45, uuid, is_number, get_time_text, get_color
+from tools import round_int, round_45, uuid, is_number, get_time_text, get_color, limit
 from writer import write_cmd
 from tkinter import filedialog
-from database import LyricsList, Note, Lyrics
+from database import LyricsList, Note, Lyrics, Eval
 from ui_manager import UIManager
 from midi_reader import MIDIReader
 
@@ -349,7 +350,7 @@ def read_midi(_setting: dict, _profile: dict) -> dict:
             _last_l = None
             for _k, _l in LyricsList(_lyrics_buffer, _setting["lyrics"]["smooth"], _setting["lyrics"]["joining"]):
                 # 判断与上个歌词显示内容是否不同
-                if _last_l == _l and _setting["compression"] == 1:
+                if _last_l == _l and _setting["compression"] == -1:
                     continue
                 # 将歌词数据合并到结果中
                 if _k not in _result:
@@ -360,7 +361,7 @@ def read_midi(_setting: dict, _profile: dict) -> dict:
 
     return _result
 
-def get_profile(_setting) -> dict:
+def get_profile(_setting: dict) -> dict:
     _profile = None
 
     if _setting["output_format"] == 3:
@@ -378,11 +379,12 @@ def get_profile(_setting) -> dict:
 
     return _profile
 
-def convertor(_setting, _task_id = None):
+def convertor(_setting: dict, _task_id = None):
     try:
         if _task_id is None: _task_id = 0
 
         _setting["remove_chord"] = global_info["setting"]["remove_chord"]
+        _setting["interpolation"] = global_info["setting"]["interpolation"]
 
         # 根据设置的游戏版本选择合适的配置文件
         _profile = get_profile(_setting)
@@ -606,7 +608,8 @@ def convertor(_setting, _task_id = None):
     except:
         global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
         logger.error(traceback.format_exc())
-        raise
+    finally:
+        evaltools.clear_cache()
 
 def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[int, Note | str]:
     if not _setting["extension"]:
@@ -627,13 +630,18 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
             if _data.percussion and not _setting["percussion"]: continue
 
             # 获取游戏中的乐器名称
+            _linear_note = False
             if _data.percussion:
                 _program = _profile["sound_list"].get(global_asset["mapping"]["percussion"].get(str(_data.program), global_asset["mapping"]["percussion"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["percussion"]["undefined"]])
+
+                if "linear_note" in global_asset["features"]["percussion"].get(str(_data.source_program), global_asset["features"]["percussion"]["undefined"]): _linear_note = True
             else:
                 if _data.program == -1:
                     _program = _profile["sound_list"][global_asset["mapping"]["default"]]
                 else:
                     _program = _profile["sound_list"].get(global_asset["mapping"].get(str(_data.program), global_asset["mapping"]["undefined"]), _profile["sound_list"][global_asset["mapping"]["undefined"]])
+
+                if "linear_note" in global_asset["features"].get(str(_data.source_program), global_asset["features"]["undefined"]): _linear_note = True
 
             if _program is None: continue
 
@@ -646,6 +654,12 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
 
                     _pitch_index = _data.pitch
                     _note_velocity = _data.velocity
+
+                    # 进行插值处理
+                    if _linear_note and _setting["hold"]:
+                        match _setting["interpolation"]:
+                            case 1: _note_velocity *= limit(0, 1 - _delay_time / (_time - _data.time), 1)
+                            case 2: _note_velocity *= limit(0, (_delay_time / (_time - _data.time) - 1) ** 2, 1)
 
                     # 如果启用调整音符功能，则会根据配置文件对音量和音调进行调整
                     if _setting["adjustment"]:
@@ -668,16 +682,11 @@ def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[i
                     else:
                         break
                     # 返回音符数据
-                    yield round_int((_data.time + _delay_time) / _setting["time_per_tick"]), Note(_sound, (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] > 1 else 0], _pitch, _data.panning)
+                    yield round_int((_data.time + _delay_time) / _setting["time_per_tick"]), Note(_sound, (_note_velocity, round_45(_note_velocity, 1), 1)[_setting["level"] if _setting["compression"] != -1 else 0], _pitch, _data.panning)
 
                     if not _setting["adjustment"]: break
 
-                if not _setting["hold"]: break
-
-                if _data.percussion:
-                    if "hold" not in global_asset["features"]["percussion"].get(str(_data.source_program), global_asset["features"]["percussion"]["undefined"]): break
-                else:
-                    if "hold" not in global_asset["features"].get(str(_data.source_program), global_asset["features"]["undefined"]): break
+                if not (_setting["hold"] and _linear_note): break
 
                 _delay_time += _setting["time_per_tick"]
         else:
@@ -698,6 +707,9 @@ def cmd_convertor(_setting: dict, _profile: dict, _start_time: int, _result: dic
 
     _raw_cmd = _raw_cmd[1:] if _raw_cmd.startswith("/") and _setting["output_format"] == 1 else _raw_cmd
 
+    _single_selector = Eval(_profile["selector"]["single"])
+    _multiple_selector = Eval(_profile["selector"].get("multiple", _profile["selector"]["single"]))
+
     if _setting["panning"]:
         _raw_cmd = _raw_cmd.replace("{POSITION}", "{PANNING}")
     else:
@@ -710,76 +722,60 @@ def cmd_convertor(_setting: dict, _profile: dict, _start_time: int, _result: dic
                 if isinstance(_i, Note):
                     _cmd = _i.format(_raw_cmd)
                 elif isinstance(_i, Lyrics):
-                    _cmd = _i.format(_profile["command"]["lyrics"][_setting["command_type"]])
+                    _cmd = _i.format(_profile["command"]["lyrics"][0])
                 else:
                     raise TypeError("Unknown Data Type: " + str(type(_i)))
 
-                yield _k - _last_time, _cmd.replace(
-                    "{TIME}", str(_k - _start_time)).replace(
-                    "{TTS}", _profile["command"]["timer_target_selector"]["regular"].replace("{VALUE}", str(_k - _start_time)))
+                yield _k - _last_time, _cmd.replace("{TIME}", str(_k - _start_time))
 
                 _last_time = _k
     else:
-        _data_buffer: dict[Note | Lyrics, list[int]] = {}
+        _data_buffer: dict[Note | Lyrics, set[int]] = {}
         for _k in sorted(_result.keys()):
             for _i in _result[_k]:
                 if _i not in _data_buffer:
-                    _data_buffer[_i] = []
+                    _data_buffer[_i] = set()
 
-                _time_node = _k - _start_time
-                if _time_node not in _data_buffer[_i]:
-                    _data_buffer[_i].append(_time_node)
+                _data_buffer[_i].add(_k - _start_time)
 
         for _k in _data_buffer:
-            for _time_list in (_data_buffer[_k][_n:_n + _setting["compression"]] for _n in range(0, len(_data_buffer[_k]), _setting["compression"])):
-                _selector = ""
-                _list_length = len(_time_list)
+            _time_nodes = tuple(_data_buffer[_k])
 
-                if _list_length == 1:
-                    _selector = _profile["command"]["timer_target_selector"]["regular"].replace("{VALUE}", str(_time_list[0]))
-                else:
-                    _str_length = len(_profile["command"]["timer_target_selector"]["compressed"][2])
-                    for _i in range(_list_length + 1):
-                        if _i > 0:
-                            _start_time = _time_list[_i - 1] + 1
+            while _time_nodes:
+                _full_length = 1 if _setting["compression"] == -1 else len(_time_nodes)
+                _length_areas = (1, _full_length)
+
+                while True:
+                    for _n, _length in enumerate((_length_areas[0], (_length_areas[0] + _length_areas[1]) // 2, _length_areas[1])):
+                        if _length == 1:
+                            _selector = _single_selector.eval({}, {"time": _time_nodes[0], "tools": evaltools, "enable_address": _setting["command_type"] == 2}).replace("{VALUE}", str(_time_nodes[0]))
                         else:
-                            _start_time = ""
+                            _selector = _multiple_selector.eval({}, {"nodes": _time_nodes[:_length], "tools": evaltools, "enable_address": _setting["command_type"] == 2})
 
-                        if _i < _list_length:
-                            _end_time = _time_list[_i] - 1
+                        if isinstance(_k, Note):
+                            _cmd = _k.format(_raw_cmd.replace("{SELECTOR}", _selector))
+                        elif isinstance(_k, Lyrics):
+                            _cmd = _k.format(_profile["command"]["lyrics"][_setting["command_type"]].replace("{SELECTOR}", _selector))
                         else:
-                            _end_time = ""
+                            raise TypeError("Unknown Data Type: " + str(type(_k)))
 
-                        if _selector:
-                            _selector += _profile["command"]["timer_target_selector"]["compressed"][2]
+                        if len(_cmd) > _setting["compression"]:
+                            if _n == 0:
+                                _length_areas = (_length_areas[0], _length_areas[0])
+                            elif _n == 1:
+                                _length_areas = (_length_areas[0], _length - 1)
+                            elif _n == 2:
+                                _length_areas = ((_length_areas[0] + _length - 1) // 2, _length - 1)
+                            break
+                        elif _n == 2:
+                            _length_areas = (_length, _length)
+                            break
 
-                        if _start_time != "" and _end_time != "":
-                            if _start_time == _end_time:
-                                _selector += _profile["command"]["timer_target_selector"]["compressed"][0].replace(
-                                    "{VALUE}", str(_end_time)
-                                )
-                            elif _start_time > _end_time:
-                                _selector = _selector[:-_str_length]
-                            else:
-                                _selector += _profile["command"]["timer_target_selector"]["compressed"][0].replace(
-                                    "{VALUE}", _profile["command"]["timer_target_selector"]["compressed"][1].replace(
-                                    "{START}", str(_start_time)).replace(
-                                    "{END}", str(_end_time))
-                                )
-                        else:
-                            _selector += _profile["command"]["timer_target_selector"]["compressed"][0].replace(
-                                "{VALUE}", _profile["command"]["timer_target_selector"]["compressed"][1].replace(
-                                "{START}", str(_start_time)).replace(
-                                "{END}", str(_end_time))
-                            )
+                    if _length_areas[0] == _length_areas[1]: break
 
-                if isinstance(_k, Note):
-                    yield 0, _k.format(_raw_cmd.replace("{TTS}", _selector))
+                _time_nodes = _time_nodes[_length:]
 
-                elif isinstance(_k, Lyrics):
-                    yield 0, _k.format(_profile["command"]["lyrics"][_setting["command_type"]].replace("{TTS}", _selector))
-                else:
-                    raise TypeError("Unknown Data Type: " + str(type(_k)))
+                yield 0, _cmd
 
     if _setting["command_type"] == 0:
         _raw_cmd = _profile["command"]["delay"][1:]
@@ -791,7 +787,7 @@ def cmd_convertor(_setting: dict, _profile: dict, _start_time: int, _result: dic
         _raw_cmd = []
 
     for _i in _raw_cmd:
-        _cmd = _i.replace("{TIME}", str(max(list(_result))))
+        _cmd = _i.replace("{TIME}", str(max(_result.keys()) - _start_time))
         yield 0, _cmd[1:] if _cmd.startswith("/") and _setting["output_format"] == 1 else _cmd
 
 def load_lrc(_lines: list[str], _time_per_tick: int = 50) -> dict[int, str]:
@@ -813,7 +809,7 @@ def load_lrc(_lines: list[str], _time_per_tick: int = 50) -> dict[int, str]:
         for _tag in _tags:
             _tag_type, _value = _tag.split(":", 1)
             if is_number(_tag_type):
-                _time = round_int((float(_tag_type) * 60 + float(_value)) * 1000 / _time_per_tick)
+                _time = round_int(((float(_tag_type) * 60 + float(_value)) * 1000 - _offset) / _time_per_tick)
                 yield _time, _argument
 
             elif _tag_type == "offset":
@@ -931,14 +927,10 @@ def set_volume(_num: None | int = None):
 
 def set_selector_num(_num: None | int = None) -> None:
     if _num is None:
-        global_info["message"].append("请输入最多压缩到单条指令内的时间项数！")
-        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_selector_num"], "text": "", "callback": set_selector_num, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
+        global_info["message"].append("请输入最大指令长度！")
+        add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_cmd_length"], "text": "字", "callback": set_selector_num, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
     else:
-        if _num >= 2:
-            global_info["setting"]["max_selector_num"] = _num
-        else:
-            global_info["setting"]["max_selector_num"] = 2
-            global_info["message"].append("单条指令内的时间项数至少为2个！")
+        global_info["setting"]["max_cmd_length"] = _num
 
 def show_download(_title: str, _url: str, _target_path, _callback=lambda: remove_page(overlay_page)):
     _state = {"state": 0, "buffer": NetBuffer()}
@@ -1039,7 +1031,7 @@ def player_callback(_path: str, _ask: bool, _info):
                     "smooth": global_info["convertor"]["lyrics"]["smooth"],
                     "joining": global_info["convertor"]["lyrics"]["joining"]
                 },
-                "compression": 1,
+                "compression": -1,
                 "extension": False,
                 "hold": global_info["convertor"]["hold"],
                 "ask_mapping": _ask and global_info["setting"]["ask_mapping"],
@@ -1095,7 +1087,7 @@ def start_task(_id: None | int = None) -> None:
         _argument = global_info["convertor"].copy()
         _argument["level"] = global_info["setting"]["compression_level"]
         _argument["ask_mapping"] = global_info["setting"]["ask_mapping"]
-        _argument["compression"] = global_info["setting"]["max_selector_num"] if global_info["convertor"]["compression"] else 1
+        _argument["compression"] = global_info["setting"]["max_cmd_length"] if global_info["convertor"]["compression"] else -1
         threading.Thread(target=run_task, args=(_argument, _id), daemon=True).start()
 
 def run_task(_args, _id):
@@ -1140,7 +1132,8 @@ def get_version_list():
                 case 3:
                     _update_list.append(_i)
                 case 4:
-                    if _i["version"] > global_info["editor_update"]["version"]: global_info["editor_update"] = _i
+                    if _i.get("mms_version", 0) == 2 and _i["version"] > global_info["editor_update"]["version"]:
+                        global_info["editor_update"] = _i
                 case 5:
                     global_info["mcpack_update"][0] = _i["hash"]
                     global_info["mcpack_update"][1] = _i["download_url"]
@@ -1292,7 +1285,7 @@ def menu_screen(_info, _input):
             case 1:
                 enter_to_player(False)
             case 2:
-                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0]}])
+                add_page(overlay_page, [software_setting_screen, {"button_state": [0, 0, 0, 0, 0]}])
             case 3:
                 add_page(overlay_page, [version_list_screen, {"size": ["你是否要下载并安装", "该版本", "？\n该软件包大小为", "--", "MB"], "tag_index": 0, "index": 0, "edition_info": global_info["update_list"], "button_state": [0, 0, 0, 0, 0]}])
             case 4:
@@ -1513,6 +1506,32 @@ def convertor_screen(_info, _input):
 
     return _root
 
+def convertor_setting_screen(_info, _input):
+    if "mouse_right" in _input and not _input["mouse_right"]:
+        remove_page(overlay_page)
+
+    _root, _id = ui_manager.apply_ui(
+        (
+            (0.025, 0.044, 0.95, 0.089, ("移除重复音符 " + ("是" if global_info["setting"]["remove_chord"] else "不"), 0.035, _info["button_state"][0]), 0),
+            (0.025, 0.177, 0.95, 0.089, ("询问映射关系 " + ("是" if global_info["setting"]["ask_mapping"] else "不"), 0.035, _info["button_state"][1]), 1),
+            (0.025, 0.311, 0.95, 0.089, ("长音插值方式 " + (("持续", "线性", "二次")[global_info["setting"]["interpolation"]]), 0.035, _info["button_state"][2]), 2)
+        ),
+        pygame.mouse.get_pos()
+    )
+
+    if "mouse_left" in _input and not _input["mouse_left"]:
+        match _id:
+            case 0: global_info["setting"]["remove_chord"] = not global_info["setting"]["remove_chord"]
+            case 1: global_info["setting"]["ask_mapping"] = not global_info["setting"]["ask_mapping"]
+            case 2:
+                global_info["setting"]["interpolation"] += 1
+                if global_info["setting"]["interpolation"] > 2:
+                    global_info["setting"]["interpolation"] = 0
+
+    change_button_alpha(_info["button_state"], _id)
+
+    return _root
+
 def software_setting_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
         remove_page(overlay_page)
@@ -1547,9 +1566,8 @@ def software_setting_screen(_info, _input):
             (0.025, 0.044, 0.95, 0.089, ("编辑指令模板", 0.035, _info["button_state"][0]), 0),
             (0.025, 0.177, 0.95, 0.089, ("指令压缩设置", 0.035, _info["button_state"][1]), 1),
             (0.025, 0.311, 0.95, 0.089, ("软件个性设置", 0.035, _info["button_state"][2]), 2),
-            (0.025, 0.444, 0.95, 0.089, ("移除重复音符 " + ("是" if global_info["setting"]["remove_chord"] else "不"), 0.035, _info["button_state"][3]), 3),
-            (0.025, 0.578, 0.95, 0.089, ("询问映射关系 " + ("是" if global_info["setting"]["ask_mapping"] else "不"), 0.035, _info["button_state"][4]), 4),
-            (0.025, 0.711, 0.95, 0.089, ("软件日志等级 " + _text, 0.035, _info["button_state"][5]), 5)
+            (0.025, 0.444, 0.95, 0.089, ("音乐转换设置", 0.035, _info["button_state"][3]), 3),
+            (0.025, 0.578, 0.95, 0.089, ("软件日志等级 " + _text, 0.035, _info["button_state"][4]), 4)
         ),
         pygame.mouse.get_pos()
     )
@@ -1559,9 +1577,8 @@ def software_setting_screen(_info, _input):
             case 0: threading.Thread(target=enter_to_editor, daemon=True).start()
             case 1: add_page(overlay_page, [compression_setting_screen, {"button_state": [0, 0]}])
             case 2: add_page(overlay_page, [custom_setting_screen, {"button_state": [0, 0, 0]}])
-            case 3: global_info["setting"]["remove_chord"] = not global_info["setting"]["remove_chord"]
-            case 4: global_info["setting"]["ask_mapping"] = not global_info["setting"]["ask_mapping"]
-            case 5:
+            case 3: add_page(overlay_page, [convertor_setting_screen, {"button_state": [0, 0, 0]}])
+            case 4:
                 global_info["setting"]["log_level"] += 1
                 if global_info["setting"]["log_level"] >= 6:
                     global_info["setting"]["log_level"] = 0
@@ -1615,7 +1632,7 @@ def compression_setting_screen(_info, _input):
     _root, _id = ui_manager.apply_ui(
         (
             (0.025, 0.044, 0.95, 0.089, ("参数压缩等级 " + ["标准", "高", "极限"][global_info["setting"]["compression_level"]], 0.035, _info["button_state"][0]), 0),
-            (0.025, 0.177, 0.95, 0.089, ("指令压缩条数 " + str(global_info["setting"]["max_selector_num"]), 0.035, _info["button_state"][1]), 1)
+            (0.025, 0.177, 0.95, 0.089, ("最大指令长度 " + str(global_info["setting"]["max_cmd_length"]) + "字", 0.035, _info["button_state"][1]), 1)
         ),
         pygame.mouse.get_pos()
     )
@@ -2131,7 +2148,7 @@ if base_path := getattr(sys, "_MEIPASS", None):
     else:
         os.chdir(base_path)
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-goEg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "ask_mapping": False, "remove_chord": True, "channels_num": 32, "animation_speed": 10, "max_selector_num": 2, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-goEg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "interpolation": 0, "ask_mapping": False, "remove_chord": True, "channels_num": 32, "max_cmd_length": 256, "animation_speed": 10, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

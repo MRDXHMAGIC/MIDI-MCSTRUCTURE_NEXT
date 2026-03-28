@@ -1,5 +1,36 @@
-from tools import limit, round_45
-from threading import Lock
+from tools import limit, round_45, get_str_pos
+
+class Eval:
+    def __init__(self, _cmd: str):
+        _offset = 0
+        _content = []
+
+        try:
+            while True:
+                _stack = 1
+                _start = _cmd.index("{EVAL:", _offset)
+
+                for _n, _i in enumerate(_cmd[_start + 6:]):
+                    if _i == "{":
+                        _stack += 1
+                    elif _i == "}":
+                        _stack -= 1
+
+                    if _stack == 0:
+                        _end = _n + _start + 6
+                        break
+                else:
+                    raise SyntaxError("\"{EVAL:\" was never closed!")
+
+                _content.extend((_cmd[:_start], compile(_cmd[_start + 6:_end], "<string>", "eval", optimize=2)))
+                _cmd = _cmd[_end + 1:]
+        except ValueError:
+            pass
+
+        self.__content = tuple(_i for _i in _content if _i) + (_cmd,)
+
+    def eval(self, _globals=None, _locals=None) -> str:
+        return "".join((_i if isinstance(_i, str) else str(eval(_i, _globals, _locals))) for _i in self.__content)
 
 class Note:
     __slots__ = (

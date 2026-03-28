@@ -1,14 +1,15 @@
 {
   "id": 1,
   "fps": 60,
-  "version": 19260327,
-  "edition": "Release",
+  "version": 20260329,
+  "edition": "Preview",
   "log_level": 5,
-  "ask_mapping": true,
-  "remove_chord": false,
+  "interpolation": 0,
+  "ask_mapping": false,
+  "remove_chord": true,
   "channels_num": 64,
+  "max_cmd_length": 256,
   "animation_speed": 10,
-  "max_selector_num": 8,
   "compression_level": 0,
   "disable_update_check": true
 }

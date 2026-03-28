@@ -89,6 +89,7 @@ with open("dist/Asset/text/setting.json", "rb") as io:
 
 setting["log_level"] = 4
 setting["ask_mapping"] = False
+setting["remove_chord"] = True
 setting["channels_num"] = 64
 setting["compression_level"] = 0
 setting["disable_update_check"] = False

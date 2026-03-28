@@ -18,6 +18,20 @@ def where_ffmpeg() -> str:
     else:
         return None
 
+def get_str_pos(_text: str, _subtext: str) -> tuple[int]:
+    _offset = 0
+    _result = []
+
+    try:
+        while True:
+            _position = _text.index(_subtext, _offset)
+            _offset = _position + len(_subtext)
+            _result.append(_position)
+    except ValueError:
+        pass
+
+    return tuple(_result)
+
 def get_color(_surf) -> tuple[int]:
     _colors = []
     for _x in range(_surf.size[0]):
