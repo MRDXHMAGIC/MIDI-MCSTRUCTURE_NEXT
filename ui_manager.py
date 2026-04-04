@@ -27,12 +27,12 @@ class UIManager:
                 _label_surf.fill((255, 255, 255, 0))
                 _label_surf.blits((
                 (self.__resource["corner_0"], (0, 0)),
-                (self.__resource["corner_1"], (0, _label[3] - self.__resource["corner_3"].get_size()[1])),
-                (self.__resource["corner_2"], (_label[2] - self.__resource["corner_2"].get_size()[0], _label[3] - self.__resource["corner_2"].get_size()[1])),
-                (self.__resource["corner_3"], (_label[2] - self.__resource["corner_1"].get_size()[0], 0))
+                (self.__resource["corner_1"], (0, _label[3] - self.__resource["corner_3"].height)),
+                (self.__resource["corner_2"], (_label[2] - self.__resource["corner_2"].width, _label[3] - self.__resource["corner_2"].height)),
+                (self.__resource["corner_3"], (_label[2] - self.__resource["corner_1"].width, 0))
                 ))
                 _mask_surf.blit(_label_surf, (_label[0] + self.__window_offset[0], _label[1] + self.__window_offset[1]), special_flags=pygame.BLEND_RGBA_MULT)
-            _alpha_surf = pygame.Surface(_base_surf.get_size()).convert_alpha()
+            _alpha_surf = pygame.Surface(_base_surf.size).convert_alpha()
             _alpha_surf.fill((127, 127, 127, 255))
             _base_surf.blit(_alpha_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
             _base_surf.blit(_mask_surf, (0, 0))
@@ -53,7 +53,7 @@ class UIManager:
         self.display_size = _size
         self.__surf_cache.clear()
 
-        _surf_size = self.__resource["blur"].get_size()
+        _surf_size = self.__resource["blur"].size
         if _surf_size[0] / _surf_size[1] > _size[0] / _size[1]:
             _target_size = (round_45((_size[1] / _surf_size[1]) * _surf_size[0]), _size[1])
         else:
@@ -61,19 +61,21 @@ class UIManager:
         _background = pygame.transform.smoothscale(self.__resource["blur"], _target_size)
         _background = _background.subsurface(pygame.Rect((round_45((_target_size[0] - _size[0]) / 2), round_45((_target_size[1] - _size[1]) / 2), _size[0], _size[1])))
 
-        _surf_size = self.__resource["background"].get_size()
+        _surf_size = self.__resource["background"].size
         if _surf_size[0] / _surf_size[1] > _size[0] / _size[1]:
             _target_size = (_size[0], round_45((_size[0] / _surf_size[0]) * _surf_size[1]))
         else:
             _target_size = (round_45((_size[1] / _surf_size[1]) * _surf_size[0]), _size[1])
+
         self.__window_size = _target_size
         self.__window_offset = (round_45((_size[0] - _target_size[0]) / 2), round_45((_size[1] - _target_size[1]) / 2))
-        _background.blit(pygame.transform.smoothscale(self.__resource["background"], _target_size), self.__window_offset)
+
         _blur_surf = pygame.Surface(_size).convert_alpha()
         _blur_surf.blit(pygame.transform.smoothscale(self.__resource["blur"], _target_size), self.__window_offset)
+        _background.blit(pygame.transform.smoothscale(self.__resource["background"], _target_size), self.__window_offset)
 
-        self.__surf_cache["background"] = _background
         self.__surf_cache["blur"] = _blur_surf
+        self.__surf_cache["background"] = _background
 
     def get_abs_position(self, _position: tuple[int], _offset: bool = False) -> tuple[int]:
         return tuple(int(round_45(_i * self.__window_size[_n % 2]) + (self.__window_offset[_n % 2] if _offset else 0)) for _n, _i in enumerate(_position))
@@ -109,7 +111,7 @@ class UIManager:
                 _text_surf = self.__font_cache[_text_size].render(_label[4][0], True, (255, 255, 255))
                 _text_surf.set_alpha(_label[4][2])
 
-                _text_surf_size = _text_surf.get_size()
+                _text_surf_size = _text_surf.size
 
                 _text_surf_array.append((_text_surf, (int(round_45((_label[0] + _label[2] / 2) - _text_surf_size[0] / 2)) + self.__window_offset[0], int(round_45((_label[1] + _label[3] / 2) - (_text_surf_size[1] - (self.__font_cache[_text_size].get_linesize() - self.__font_cache[_text_size].get_height())) / 2)) + self.__window_offset[1])))
 

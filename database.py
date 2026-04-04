@@ -1,5 +1,23 @@
 from tools import limit, round_45, get_str_pos
 
+class AverageNumber:
+    def __init__(self) -> None:
+        self.__num = 0
+        self.__sum = 0
+
+    def __bool__(self) -> bool:
+        return bool(self.__num)
+
+    def get(self) -> float:
+        if self.__num == 0:
+            return 0
+        else:
+            return self.__sum / self.__num
+
+    def put(self, _num: float) -> None:
+        self.__num += 1
+        self.__sum += _num
+
 class Eval:
     def __init__(self, _cmd: str):
         _offset = 0

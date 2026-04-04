@@ -3,6 +3,7 @@ import sys
 import log
 import json
 import time
+import uuid
 import pickle
 import shutil
 import pygame
@@ -15,10 +16,10 @@ import traceback
 import subprocess
 import webbrowser
 from math import ceil
-from tools import round_int, round_45, uuid, is_number, get_time_text, get_color, limit
+from tools import round_int, round_45, is_number, get_time_text, get_color, limit
 from writer import write_cmd
 from tkinter import filedialog
-from database import LyricsList, Note, Lyrics, Eval
+from database import LyricsList, Note, Lyrics, Eval, AverageNumber
 from ui_manager import UIManager
 from midi_reader import MIDIReader
 
@@ -58,10 +59,10 @@ class NetBuffer:
             raise self.__exception
         elif _size == -1:
             _data, self.__data = self.__data, b""
-            self.pos += len(_data)
         else:
             _data, self.__data = self.__data[:_size], self.__data[_size:]
-            self.pos += _size
+
+        self.pos += len(_data)
 
         return _data
 
@@ -159,9 +160,9 @@ def asset_load() -> None:
 
         logger.debug("Loading Profile...")
         if load_profile():
-            global_info["message"].insert(0, "小提示：使用鼠标左右键来进入或返回页面！")
+            global_info["message"].insert(0, "小提示\n使用鼠标左右键来进入或返回页面")
         else:
-            global_info["message"].append("无法加载配置文件，已加载默认配置文件！")
+            show_message("无法加载配置文件，已加载默认配置文件")
 
         logger.debug("Initialized Successfully!")
 
@@ -181,13 +182,14 @@ def asset_load() -> None:
             while overlay_page: pass
             add_page(overlay_page, [menu_screen, {"button_state": [0, 0, 0, 0, 0]}], 0, False)
 
-        global_info["message_info"][2] = True
+        global_info["message_is_armed"] = True
     except:
         global_info["exit"] = 3
         logger.error(traceback.format_exc())
 
 def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygame.Surface]:
     try:
+        global_info["message_is_armed"] = False
         # 添加资源
         ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
         # 设置尺寸
@@ -202,12 +204,15 @@ def change_size(_size: tuple[int], _exit: bool) -> tuple[list[int] | None, pygam
         add_page(overlay_page, [loading_screen, {"progress": None, "alpha": 0}], 1)
         # 加载字体
         global_asset["font"] = pygame.font.Font("Asset/font/font.ttf", ui_manager.get_abs_position((0, 0.062))[1])
+        global_asset["font"].set_linesize(round_int(global_asset["font"].get_height() * 1.2))
+        global_asset["font"].align = pygame.FONT_CENTER
         # 加载消息背景
-        global_asset["message_mask"] = pygame.transform.scale(global_asset["res_message"], ui_manager.get_abs_position((1, 0.089))).convert_alpha()
+        global_asset["message_mask"] = pygame.transform.scale(global_asset["res_message"], ui_manager.get_abs_position((1, 1))).convert_alpha()
         # 移除页面
         if _exit:
             time.sleep(0.3)
             remove_page(overlay_page)
+            global_info["message_is_armed"] = True
     except:
         logger.fatal(traceback.format_exc())
         global_info["exit"] = 3
@@ -257,11 +262,11 @@ def read_midi(_setting: dict, _profile: dict) -> dict:
     try:
         with open("Cache/mapping/" + _path_hash + ".pkl", "rb") as _io:
             _mapping = pickle.load(_io)
-        if _setting["ask_mapping"]: global_info["message"].append("请调整乐器音色映射方案（已加载缓存方案）")
+        if _setting["ask_mapping"]: show_message("请调整乐器音色映射方案（已加载缓存方案）")
     except:
         logger.debug(traceback.format_exc())
         _mapping = {}
-        if _setting["ask_mapping"]: global_info["message"].append("请调整乐器音色映射方案")
+        if _setting["ask_mapping"]: show_message("请调整乐器音色映射方案")
 
     if _setting["ask_mapping"]:
         _instruments = _midi_reader.scan_instruments()
@@ -295,13 +300,12 @@ def read_midi(_setting: dict, _profile: dict) -> dict:
 
     # 调整平均音量，音符数据取整，最终合并到结果中
     _lyrics_buffer: dict[int, str] = {}
-    _average_volume = [0, 0]
+    _average_volume = AverageNumber()
     for _k, _i in get_notes(_midi_reader, _setting, _profile):
         if isinstance(_i, Note):
             # 如果启用控制平均音量功能，就记录音量信息
             if _setting["volume"]:
-                _average_volume[0] += 1
-                _average_volume[1] += _i.dump()["volume"]
+                _average_volume.put(_i.dump()["volume"])
 
             # 将音符数据合并到结果中
             if _k not in _result:
@@ -324,8 +328,8 @@ def read_midi(_setting: dict, _profile: dict) -> dict:
         else:
             raise TypeError("Unknown Data Type: " + str(type(_i)))
 
-    if _average_volume[0] and _average_volume[1]:
-        Note.master_volume = (_setting["volume"] / 100) / (_average_volume[1] / _average_volume[0])
+    if _average_volume:
+        Note.master_volume = _average_volume.get()
     else:
         Note.master_volume = 1
 
@@ -364,9 +368,7 @@ def read_midi(_setting: dict, _profile: dict) -> dict:
 def get_profile(_setting: dict) -> dict:
     _profile = None
 
-    if _setting["output_format"] == 3:
-        _profile = global_asset["profile"]["midi_preview"]
-    elif global_info["convertor"]["edition"] == 0:
+    if global_info["convertor"]["edition"] == 0:
         if global_info["convertor"]["version"] == 0:
             _profile = global_asset["profile"]["old_bedrock"]
         elif global_info["convertor"]["version"] == 1:
@@ -380,6 +382,8 @@ def get_profile(_setting: dict) -> dict:
     return _profile
 
 def convertor(_setting: dict, _task_id = None):
+    _progress = {"text": "加载中", "progress": 0}
+    add_page(overlay_page, [processing_screen, _progress])
     try:
         if _task_id is None: _task_id = 0
 
@@ -388,6 +392,9 @@ def convertor(_setting: dict, _task_id = None):
 
         # 根据设置的游戏版本选择合适的配置文件
         _profile = get_profile(_setting)
+
+        _progress["text"] = "正在解析MIDI文件"
+        _progress["progress"] = 1 / 4
 
         # 读取MIDI音乐
         _result = read_midi(_setting, _profile)
@@ -406,6 +413,9 @@ def convertor(_setting: dict, _task_id = None):
 
         _music_name = os.path.splitext(os.path.basename(_setting["file"]))[0]
 
+        _progress["text"] = "正在生成文件"
+        _progress["progress"] = 2 / 4
+
         if _setting["output_format"] == 0:
             _crc, _buffer = write_cmd(
                 {
@@ -418,6 +428,9 @@ def convertor(_setting: dict, _task_id = None):
                     )
                 }
             )
+
+            _progress["text"] = "等待用户保存文件"
+            _progress["progress"] = 3 / 4
 
             if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
                                                           initialfile=_music_name + "-" + _crc,
@@ -442,8 +455,8 @@ def convertor(_setting: dict, _task_id = None):
 
                 _manifest_file["header"]["name"] = _music_name
                 if _setting["version"] == 1: _manifest_file["header"]["min_engine_version"] = [1, 19, 50]
-                _manifest_file["header"]["uuid"] = "-".join((uuid(8), uuid(4), uuid(4), uuid(4), uuid(12)))
-                _manifest_file["modules"][0]["uuid"] = "-".join((uuid(8), uuid(4), uuid(4), uuid(4), uuid(12)))
+                _manifest_file["header"]["uuid"] = str(uuid.uuid4())
+                _manifest_file["modules"][0]["uuid"] = str(uuid.uuid4())
 
                 _behavior_file = [
                     {
@@ -502,6 +515,9 @@ def convertor(_setting: dict, _task_id = None):
                     "Cache/output/pack.png"
                 )
 
+            _progress["text"] = "等待用户保存文件"
+            _progress["progress"] = 3 / 4
+
             if _setting["version"] == 0 and _setting["edition"] == 1:
                 if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
                                                               initialfile=_music_name,
@@ -547,69 +563,30 @@ def convertor(_setting: dict, _task_id = None):
                 _manifest_file = json.loads(_io.read())
 
             _manifest_file["header"]["name"] = _music_name
-            _manifest_file["header"]["uuid"] = "-".join((uuid(8), uuid(4), uuid(4), uuid(4), uuid(12)))
-            _manifest_file["modules"][0]["uuid"] = "-".join((uuid(8), uuid(4), uuid(4), uuid(4), uuid(12)))
+            _manifest_file["header"]["uuid"] = str(uuid.uuid4())
+            _manifest_file["modules"][0]["uuid"] = str(uuid.uuid4())
 
             with open("Cache/convertor/manifest.json", "w", encoding="utf-8") as _io:
                 _io.write(json.dumps(_manifest_file))
 
             shutil.make_archive("Cache/output/package", "zip", "Cache/convertor")
+
+            _progress["text"] = "等待用户保存文件"
+            _progress["progress"] = 3 / 4
+
             if _save_path := filedialog.asksaveasfilename(title="MIDI-MCSTRUCTURE NEXT",
                                                           filetypes=[("MCPACK Files", ".mcpack")],
                                                           initialfile=_music_name,
                                                           defaultextension=".mcpack"):
                 if os.path.exists(_save_path): os.remove(_save_path)
                 shutil.copyfile("Cache/output/package.zip", _save_path)
-        elif _setting["output_format"] == 3:
-            _available_pitch = set()
-            for _n in os.listdir("Cache/sounds"):
-                if os.path.isdir("Cache/sounds/" + _n):
-                    _available_pitch.update(float(os.path.splitext(_i)[0]) for _i in os.listdir("Cache/sounds/" + _n))
-
-            _sound_list = {}
-            for _k in sorted(_result.keys()):
-                for _note in map(lambda _i: _i.dump(False), filter(lambda _i: isinstance(_i, Note), _result[_k])):
-                    _pitch = min(((abs(_n - _note["pitch"]), _n) for _n in _available_pitch), key=lambda _i: _i[0])[1]
-
-                    if _note["program"] not in _sound_list:
-                        _sound_list[_note["program"]] = {}
-
-                    if _note["pitch"] not in _sound_list[_note["program"]]:
-                        if os.path.exists(f"Cache/sounds/{_note["program"]}/{_pitch}.ogg"):
-                            _sound_list[_note["program"]][_note["pitch"]] = pygame.mixer.Sound(f"Cache/sounds/{_note["program"]}/{_pitch}.ogg")
-                        else:
-                            logger.debug(f"Sound {_note["program"]}: {_pitch}.ogg is not Exist!")
-
-            _setting["player_info"]["armed"] = True
-            _setting["player_info"]["length"] = max(_result.keys())
-
-            _clock = pygame.Clock()
-            while _setting["player_info"]["armed"]:
-                if not 0 <= _setting["player_info"]["position"] <= _setting["player_info"]["length"]:
-                    _setting["player_info"]["play"] = False
-                    _setting["player_info"]["position"] = 0
-
-                if _setting["player_info"]["play"]:
-                    if _notes := _result.get(_setting["player_info"]["position"], None):
-                        for _note in map(lambda _i: _i.dump(False), _notes):
-                            match _note:
-                                case {"type": "note", "program": _program, "pitch": _pitch, "volume": _volume, "panning": _}:
-                                    if _sound := _sound_list[_program].get(_pitch, None):
-                                        _sound.set_volume(_volume)
-                                        _sound.play()
-                                    else:
-                                        logger.debug("Cannot Found Sound: " + str(_program))
-                                case {"type": "lyrics", "last": _last, "real_f": _rf, "real_s": _rs, "next": _next}:
-                                    _setting["player_info"]["lyrics"] = (_rf, _rs)
-                                case _:
-                                    raise TypeError("Unknown Data Type: " + _note["type"])
-                    _setting["player_info"]["position"] += 1
-                _clock.tick(20)
     except:
-        global_info["message"].append("转换失败，请将log.txt发送给开发者以修复问题！")
+        show_message("转换失败，请将log.txt发送给开发者以修复问题")
         logger.error(traceback.format_exc())
     finally:
-        evaltools.clear_cache()
+        _progress["text"] = "文件转换结束"
+        _progress["progress"] = 1
+        remove_page(overlay_page)
 
 def get_notes(_midi_file: MIDIReader, _setting: dict, _profile: dict) -> tuple[int, Note | str]:
     if not _setting["extension"]:
@@ -739,41 +716,47 @@ def cmd_convertor(_setting: dict, _profile: dict, _start_time: int, _result: dic
                 _data_buffer[_i].add(_k - _start_time)
 
         for _k in _data_buffer:
-            _time_nodes = tuple(_data_buffer[_k])
+            _average = AverageNumber()
+            _time_nodes = tuple(sorted(_data_buffer[_k]))
 
             while _time_nodes:
                 _full_length = 1 if _setting["compression"] == -1 else len(_time_nodes)
-                _length_areas = (1, _full_length)
 
-                while True:
-                    for _n, _length in enumerate((_length_areas[0], (_length_areas[0] + _length_areas[1]) // 2, _length_areas[1])):
-                        if _length == 1:
-                            _selector = _single_selector.eval({}, {"time": _time_nodes[0], "tools": evaltools, "enable_address": _setting["command_type"] == 2}).replace("{VALUE}", str(_time_nodes[0]))
+                _length = limit(1, round_int(_average.get()), _full_length)
+
+                _direction = None
+                while 0 < _length <= _full_length:
+                    if _length == 1:
+                        _selector = _single_selector.eval({}, {"time": _time_nodes[0], "tools": evaltools, "enable_address": _setting["command_type"] == 2}).replace("{VALUE}", str(_time_nodes[0]))
+                    else:
+                        _selector = _multiple_selector.eval({}, {"nodes": _time_nodes[:_length], "tools": evaltools, "enable_address": _setting["command_type"] == 2})
+
+                    if isinstance(_k, Note):
+                        _cmd = _k.format(_raw_cmd.replace("{SELECTOR}", _selector))
+                    elif isinstance(_k, Lyrics):
+                        _cmd = _k.format(_profile["command"]["lyrics"][_setting["command_type"]].replace("{SELECTOR}", _selector))
+                    else:
+                        raise TypeError("Unknown Data Type: " + str(type(_k)))
+
+                    if _direction is None:
+                        _direction = len(_cmd) > _setting["compression"]
+
+                    if _direction:
+                        if len(_cmd) <= _setting["compression"]:
+                            break
                         else:
-                            _selector = _multiple_selector.eval({}, {"nodes": _time_nodes[:_length], "tools": evaltools, "enable_address": _setting["command_type"] == 2})
-
-                        if isinstance(_k, Note):
-                            _cmd = _k.format(_raw_cmd.replace("{SELECTOR}", _selector))
-                        elif isinstance(_k, Lyrics):
-                            _cmd = _k.format(_profile["command"]["lyrics"][_setting["command_type"]].replace("{SELECTOR}", _selector))
-                        else:
-                            raise TypeError("Unknown Data Type: " + str(type(_k)))
-
+                            _length -= 1
+                    else:
                         if len(_cmd) > _setting["compression"]:
-                            if _n == 0:
-                                _length_areas = (_length_areas[0], _length_areas[0])
-                            elif _n == 1:
-                                _length_areas = (_length_areas[0], _length - 1)
-                            elif _n == 2:
-                                _length_areas = ((_length_areas[0] + _length - 1) // 2, _length - 1)
-                            break
-                        elif _n == 2:
-                            _length_areas = (_length, _length)
-                            break
+                            _direction = True
+                            _length -= 1
+                        else:
+                            _length += 1
 
-                    if _length_areas[0] == _length_areas[1]: break
+                _length = limit(1, _length, _full_length)
 
                 _time_nodes = _time_nodes[_length:]
+                _average.put(_length)
 
                 yield 0, _cmd
 
@@ -826,58 +809,71 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
             _pages.append(_window)
 
             if _overlay[_n][3]:
-                _overlay[_n][2] += (1.1 - _overlay[_n][2]) * global_info["animation_speed"]
-                if _overlay[_n][2] >= 1: _overlay[_n][2] = 1
+                _target = 1.1
             else:
-                _overlay[_n][2] += (-0.1 - _overlay[_n][2]) * global_info["animation_speed"]
+                _target = -0.1
+
+            _overlay[_n][2] = limit(0, _overlay[_n][2] + (_target - _overlay[_n][2]) * global_info["animation_speed"], 1)
         except KeyboardInterrupt:
             raise KeyboardInterrupt
         except Exception as _exception:
             if sum(1 for _i in _overlay if _i[3]) > 1:
-                global_info["message"].append("MMS-UI错误，请将log.txt发送给开发者以修复问题！")
+                show_message("MMS-UI错误，请将log.txt发送给开发者以修复问题")
                 logger.error(traceback.format_exc())
                 del _overlay[_n:]
                 return
             else:
                 raise _exception
 
-        if _overlay[_n][2] == 1: break
-        elif _overlay[_n][2] <= 0: del _overlay[_n]
+        if _overlay[_n][2] >= 1:
+            break
+        elif _overlay[_n][2] <= 0:
+            del _overlay[_n]
 
     _root.blits((_page, (0, 0)) for _page in reversed(_pages))
 
-    if global_info["message"] and global_info["message_info"][2]:
-        _h = global_info["message_info"][0] * 0.089
+    if global_info["message"] and global_info["message_is_armed"]:
+        _text = "".join(global_info["message"][0])
+        _text_surface = global_asset["font"].render(_text, True, global_info["color"])
+        _text_surface.set_alpha(255 * global_info["message_info"][0])
 
-        if ui_manager.get_abs_position((0, _h))[1] <= 3 and global_info["message_info"][1] > 3000:
-            global_info["message_info"] = [0, 0, True]
-            del global_info["message"][0]
+        _height = limit(3, round_int((_text_surface.height + global_asset["font"].get_linesize() - global_asset["font"].get_height()) * global_info["message_info"][0]), ui_manager.get_abs_position((0, 1))[1])
 
-        try:
-            _message_surf = pygame.transform.box_blur(_root.subsurface((ui_manager.get_abs_position((0, 1 - _h), True) + ui_manager.get_abs_position((1, _h)))), 2)
-            _text_surface = global_asset["font"].render(global_info["message"][0], True, global_info["color"])
-            _text_surface.set_alpha(255 * global_info["message_info"][0])
+        _offset = ui_manager.get_abs_position((0, 0), True)
 
-            _text_position = ui_manager.get_abs_position((0.5, 1.044 - _h), True)
-            _message_surf.blits(((global_asset["message_mask"], (0, 0)), (_text_surface, ((_message_surf.size[0] - _text_surface.get_size()[0]) / 2, (ui_manager.get_abs_position((0, 0.089))[1] - global_asset["font"].get_height()) / 2))))
+        _message_surf = pygame.transform.box_blur(_root.subsurface((_offset[0], _root.height - _offset[1] - _height, global_asset["message_mask"].width, _height)), 2)
 
-            _root.blit(_message_surf, ui_manager.get_abs_position((0, 1 - _h), True))
-        except:
-            pass
+        _message_surf.blits(
+            (
+                (global_asset["message_mask"], (0, 0)),
+                (_text_surface, (round_int((_message_surf.width - _text_surface.width) / 2), (global_asset["font"].get_linesize() - global_asset["font"].get_height())))
+            )
+        )
 
-        if global_info["message_info"][1] <= 3000:
-            global_info["message_info"][0] += (1 - global_info["message_info"][0]) * global_info["animation_speed"]
-        else:
-            global_info["message_info"][0] -= global_info["message_info"][0] * global_info["animation_speed"]
+        _root.blit(_message_surf, (_offset[0], _root.height - _offset[1] - _height))
 
         global_info["message_info"][1] += timer.get_time()
 
+        if hash(_text) != global_info["message_info"][2]:
+            global_info["message_info"][2] = hash(_text)
+            global_info["message_info"][1] = 0
+        elif global_info["message_info"][1] <= 2000 + 1000 * min(_text.count("\n") + 1, 4):
+            global_info["message_info"][0] += (1 - global_info["message_info"][0]) * global_info["animation_speed"]
+        elif _height == 3:
+            global_info["message_info"] = [0, 0, 0]
+            del global_info["message"][0]
+        else:
+            global_info["message_info"][0] -= global_info["message_info"][0] * global_info["animation_speed"]
+
 # 功能函数
+def show_message(_message: str | tuple[str]) -> None:
+    global_info["message"].append(_message)
+
 def watchdog():
     try:
         while True:
             if global_info["watch_dog"] >= 100:
-                logger.fatal("Run Timed Out of 3000ms Exceeded!\nProcess is Killed by Watchdog!")
+                logger.fatal("Run Timed Out of 10000ms Exceeded!\nProcess is Killed by Watchdog!")
                 logger.done()
                 break
             global_info["watch_dog"] += 1
@@ -908,26 +904,26 @@ def produce_background(_path: str = "") -> None:
             pygame.image.save(global_asset["blur"], "Cache/image/blur.png")
 
             ui_manager.add_resource(_font_path="Asset/font/font.ttf", _corner_surf=pygame.image.load("Asset/image/corner_mask.png"), _blur_surf=global_asset["blur"], _background_surf=global_asset["menu"])
-            global_info["message"].append("已成功设置背景！")
+            show_message("已成功设置背景")
         else:
             threading.Thread(target=open_filedialog, args=(produce_background, (("Image Files", ".png"), ("Image Files", ".jpg"), ("Image Files", ".jpeg")))).start()
     except:
-        global_info["message"].append("无法加载图片文件！")
+        show_message("无法加载图片文件！")
         raise
 
 def set_volume(_num: None | int = None):
     if _num is None:
-        global_info["message"].append("请输入平均音量！")
+        show_message("请输入平均音量")
         add_page(overlay_page, [keyboard_screen, {"value": global_info["convertor"]["volume"], "text": "%", "callback": set_volume, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
     else:
         if 0 < _num <= 100:
             global_info["convertor"]["volume"] = _num
         else:
-            global_info["message"].append("平均音量需要在0%到100%之间！")
+            show_message("平均音量需要在0%到100%之间！")
 
 def set_selector_num(_num: None | int = None) -> None:
     if _num is None:
-        global_info["message"].append("请输入最大指令长度！")
+        show_message("请输入最大指令长度")
         add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["max_cmd_length"], "text": "字", "callback": set_selector_num, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
     else:
         global_info["setting"]["max_cmd_length"] = _num
@@ -949,7 +945,7 @@ def install_editor():
         logger.error(traceback.format_exc())
 
 def enter_to_editor(_path: str = ""):
-    add_page(overlay_page, [processing_screen, {}])
+    add_page(overlay_page, [processing_screen, {"text": "注意！\n请不要加载陌生来源的配置文件\n因为存在执行任意代码的风险"}])
     _remove = True
     try:
         if _path: shutil.copy(_path, "Asset/text/profile.json")
@@ -973,14 +969,12 @@ def enter_to_editor(_path: str = ""):
                 threading.Thread(target=get_resource_size, args=(global_info["editor_update"]["download_url"], _text), daemon=True).start()
                 add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载并安装", "取消"], "argument": ("ProfileEditor V" + str(global_info["editor_update"]["version"]), global_info["editor_update"]["download_url"], "Editor", install_editor), "callback": show_download, "content": _text}], 0, True)
             else:
-                global_info["message"].append("无法加载编辑器版本信息，请稍后重试！")
-
-            raise _exc
-
-        if load_profile():
-            global_info["message"].append("已重新加载配置文件！")
+                show_message("无法加载编辑器版本信息，请稍后重试！")
         else:
-            global_info["message"].append("无法加载配置文件，已加载备配置文件！")
+            if load_profile():
+                show_message("已重新加载配置文件")
+            else:
+                show_message("无法加载配置文件，已加载备配置文件")
     except:
         logger.error(traceback.format_exc())
     finally:
@@ -996,69 +990,112 @@ def open_filedialog(_callback, _type: tuple[tuple[str]], *_args):
 def midi_file_callback(_path: str):
     global_info["convertor"]["file"] = _path
     if os.path.exists(os.path.splitext(_path)[0] + ".lrc"):
-        global_info["message"].append("检测到同名的.lrc文件，启用歌词显示即可加载歌词！")
+        show_message("检测到同名的.lrc文件，启用歌词显示即可加载歌词")
     else:
-        global_info["message"].append("未检测到同名的.lrc文件，若启用歌词显示将尝试从MIDI中获取")
+        show_message("未检测到同名的.lrc文件，若启用歌词显示将尝试从MIDI中获取")
 
 def player_callback(_path: str, _ask: bool, _info):
     if _ask:
-        _info["position"] = 0
         _info["length"] = 0
         _info["lyrics"] = ("", "")
+        _info["position"] = 0
 
-    _info["armed"] = False
     _info["file"] = _path
+    _info["armed"] = False
 
     try:
-        convertor(
-            {
-                "file": _path,
-                "edition": 0,
-                "version": 1,
-                "command_type": 0,
-                "output_format": 3,
-                "volume": global_info["convertor"]["volume"],
-                "structure": 0,
-                "skip": False,
-                "time_per_tick": global_info["convertor"]["time_per_tick"],
-                "max_time_error": global_info["convertor"]["max_time_error"],
-                "enable_accurate_tick": global_info["convertor"]["enable_accurate_tick"],
-                "adjustment": global_info["convertor"]["adjustment"],
-                "percussion": global_info["convertor"]["percussion"],
-                "panning": False,
-                "lyrics": {
-                    "enable": global_info["convertor"]["lyrics"]["enable"],
-                    "smooth": global_info["convertor"]["lyrics"]["smooth"],
-                    "joining": global_info["convertor"]["lyrics"]["joining"]
-                },
-                "compression": -1,
-                "extension": False,
-                "hold": global_info["convertor"]["hold"],
-                "ask_mapping": _ask and global_info["setting"]["ask_mapping"],
-                "player_info": _info
-             },
-            None
-        )
+        _setting = {
+            "file": _path,
+            "hold": global_info["convertor"]["hold"],
+            "volume": global_info["convertor"]["volume"],
+            "extension": False,
+            "adjustment": global_info["convertor"]["adjustment"],
+            "percussion": global_info["convertor"]["percussion"],
+            "compression": -1,
+            "ask_mapping": _ask and global_info["setting"]["ask_mapping"],
+            "remove_chord": global_info["setting"]["remove_chord"],
+            "time_per_tick": global_info["convertor"]["time_per_tick"],
+            "interpolation": global_info["setting"]["interpolation"],
+            "max_time_error": global_info["convertor"]["max_time_error"],
+            "enable_accurate_tick": global_info["convertor"]["enable_accurate_tick"],
+            "lyrics": {
+                "enable": global_info["convertor"]["lyrics"]["enable"],
+                "smooth": global_info["convertor"]["lyrics"]["smooth"],
+                "joining": global_info["convertor"]["lyrics"]["joining"]
+            }
+        }
+
+        _result = read_midi(_setting, global_asset["profile"]["midi_preview"])
+
+        _available_pitch = set()
+        for _n in os.listdir("Asset/sounds"):
+            if os.path.isdir("Asset/sounds/" + _n):
+                _available_pitch.update(float(os.path.splitext(_i)[0]) for _i in os.listdir("Asset/sounds/" + _n))
+
+        _sound_list = {}
+        for _k in sorted(_result.keys()):
+            for _note in map(lambda _i: _i.dump(False), filter(lambda _i: isinstance(_i, Note), _result[_k])):
+                _pitch = min(((abs(_n - _note["pitch"]), _n) for _n in _available_pitch), key=lambda _i: _i[0])[1]
+
+                if _note["program"] not in _sound_list:
+                    _sound_list[_note["program"]] = {}
+
+                if _note["pitch"] not in _sound_list[_note["program"]]:
+                    if os.path.exists(f"Asset/sounds/{_note["program"]}/{_pitch}.ogg"):
+                        _sound_list[_note["program"]][_note["pitch"]] = pygame.mixer.Sound(
+                            f"Asset/sounds/{_note["program"]}/{_pitch}.ogg")
+                    else:
+                        logger.debug(f"Sound {_note["program"]}: {_pitch}.ogg is not Exist!")
+
+        _info["armed"] = True
+        _info["length"] = max(_result.keys())
+
+        _clock = pygame.Clock()
+        while _info["armed"]:
+            if not 0 <= _info["position"] <= _info["length"]:
+                _info["play"] = False
+                _info["position"] = 0
+
+            if _info["play"]:
+                if _notes := _result.get(_info["position"], None):
+                    for _note in map(lambda _i: _i.dump(False), _notes):
+                        match _note:
+                            case {"type": "note", "program": _program, "pitch": _pitch, "volume": _volume,
+                                  "panning": _}:
+                                if _sound := _sound_list[_program].get(_pitch, None):
+                                    _sound.set_volume(_volume)
+                                    _sound.play()
+                                else:
+                                    logger.debug("Cannot Found Sound: " + str(_program))
+                            case {"type": "lyrics", "last": _last, "real_f": _rf, "real_s": _rs, "next": _next}:
+                                _info["lyrics"] = (_rf, _rs)
+                            case _:
+                                raise TypeError("Unknown Data Type: " + _note["type"])
+                _info["position"] += 1
+            _clock.tick(20)
     except:
+        show_message("无法播放，请将log.txt发送给开发者以修复问题")
+        logger.error(traceback.format_exc())
+    finally:
         _info["armed"] = True
 
 def enter_to_player(_remove: bool = True):
     if _remove: remove_page(overlay_page)
-    if (os.path.exists("Cache/sounds") and any(_path.endswith(".ver") for _path in os.listdir("Cache/sounds"))) and (global_info["sounds_update"]["version"] == -1 or os.path.exists("Cache/sounds/" + str(global_info["sounds_update"]["version"]) + ".ver")):
+    if (os.path.exists("Asset/sounds") and any(_path.endswith(".ver") for _path in os.listdir("Asset/sounds"))) and (global_info["sounds_update"]["version"] == -1 or os.path.exists("Asset/sounds/" + str(global_info["sounds_update"]["version"]) + ".ver")):
         if global_info["convertor"]["time_per_tick"] == -1:
             global_info["convertor"]["time_per_tick"] = 50
         add_page(overlay_page, [player_screen, {"button_state": [0, 0, 0, 0, 0], "file": "", "play": False, "armed": True, "length": 0, "position": 0, "lyrics": ("", "")}])
     elif global_info["sounds_update"]["version"] == -1:
-        global_info["message"].append("MMS音乐预览需要下载音效包，但目前无网络连接")
+        show_message("MMS音乐预览需要下载音效包，但目前无网络连接")
         logger.info("No Internet Connection.")
     else:
         _text = ["你需要Minecraft音效包 V", str(global_info["sounds_update"]["version"]), "，是否下载？\n音效包大小为", "--", "MB"]
-        threading.Thread(target=get_resource_size, args=(global_info["editor_update"]["download_url"], _text), daemon=True).start()
-        add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载", "取消"], "argument": ("SoundCollection V" + str(global_info["sounds_update"]["version"]), global_info["sounds_update"]["download_url"], "Cache/sounds", enter_to_player), "callback": show_download, "content": _text}], 0, True)
+        threading.Thread(target=get_resource_size, args=(global_info["sounds_update"]["download_url"], _text), daemon=True).start()
+        add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载", "取消"], "argument": ("SoundCollection V" + str(global_info["sounds_update"]["version"]), global_info["sounds_update"]["download_url"], "Asset/sounds", enter_to_player), "callback": show_download, "content": _text}], 0, True)
 
 def set_time_per_tick(_time: None | int = None) -> None:
     if _time is None:
-        global_info["message"].append("请输入每游戏刻的时间！")
+        show_message("请输入每游戏刻的时间")
         add_page(overlay_page, [keyboard_screen, {"value": global_info["convertor"]["time_per_tick"], "text": "ms/tick", "callback": set_time_per_tick, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
     else:
         if _time >= 1:
@@ -1067,7 +1104,7 @@ def set_time_per_tick(_time: None | int = None) -> None:
                 global_info["convertor"]["max_time_error"] = _time
         else:
             _time = 1
-            global_info["message"].append("每游戏刻的时间至少要大于0！")
+            show_message("每游戏刻的时间至少要大于0！")
 
 def start_task(_id: None | int = None) -> None:
     if not global_info["convertor"]["file"]:
@@ -1080,7 +1117,7 @@ def start_task(_id: None | int = None) -> None:
         return
 
     if global_info["convertor"]["command_type"] == 2 and _id is None:
-        global_info["message"].append("请输入编号！")
+        show_message("请输入编号")
         add_page(overlay_page, [keyboard_screen, {"value": global_info["setting"]["id"], "text": "", "callback": start_task, "button_state": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}])
     else:
         if _id is not None: global_info["setting"]["id"] = _id
@@ -1088,14 +1125,7 @@ def start_task(_id: None | int = None) -> None:
         _argument["level"] = global_info["setting"]["compression_level"]
         _argument["ask_mapping"] = global_info["setting"]["ask_mapping"]
         _argument["compression"] = global_info["setting"]["max_cmd_length"] if global_info["convertor"]["compression"] else -1
-        threading.Thread(target=run_task, args=(_argument, _id), daemon=True).start()
-
-def run_task(_args, _id):
-    add_page(overlay_page, [processing_screen, {}])
-    try:
-        convertor(_args, _id)
-    finally:
-        remove_page(overlay_page)
+        threading.Thread(target=convertor, args=(_argument, _id), daemon=True).start()
 
 def exit_mapping_screen(_info) -> None:
     _info[0] = 1
@@ -1139,6 +1169,7 @@ def get_version_list():
                     global_info["mcpack_update"][1] = _i["download_url"]
                 case 6:
                     global_info["sounds_update"] = _i
+                    logger.info(str(_i))
                 case 7:
                     global_info["links"][_i["type"]] = _i["url"]
                 case _:
@@ -1201,7 +1232,7 @@ def downloader(_url, _buffer: NetBuffer):
 def unpack(_path: str, _ask: bool = False):
     try:
         if _ask:
-            global_info["message"].append("正在解压软件包...")
+            show_message("正在解压软件包...")
             shutil.unpack_archive("Asset/updater/package.tar.zst", "Updater")
             shutil.unpack_archive(_path, "Update")
             global_info["exit"] = 2
@@ -1209,7 +1240,7 @@ def unpack(_path: str, _ask: bool = False):
             add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["安装", "取消"], "argument": (_path, True), "callback": unpack, "content": "是否将以下文件作为软件安装包安装？\n" + os.path.basename(_path)}], 0, True)
     except:
         logger.error(traceback.format_exc())
-        global_info["message"].append("无法解压软件包！")
+        show_message("无法解压软件包！")
 
 def update_mcpack():
     try:
@@ -1232,10 +1263,10 @@ def update_mcpack():
             if global_info["mcpack_update"][0] != str(_real_hash.hexdigest()):
                 raise IOError("Broken Package, Please Try Again.")
 
-            global_info["message"].append("行为包模板更新成功！")
+            show_message("行为包模板更新成功")
     except:
         logger.warn(traceback.format_exc())
-        global_info["message"].append("MMS检测到行为包模板更新，但因某些原因无法更新")
+        show_message("MMS检测到行为包模板更新，但因某些原因无法更新")
 
 # 各种函数（用于GUI）
 def loading_screen(_info, _input) -> pygame.Surface:
@@ -1265,7 +1296,7 @@ def menu_screen(_info, _input):
             case _i if _i.lower() in (".zst", ".xz", ".gz", ".zip"):
                 threading.Thread(target=unpack, args=[_input["drop_file"]], daemon=True).start()
             case _:
-                global_info["message"].append("不支持的文件 " + os.path.basename(_input["drop_file"]))
+                show_message("不支持的文件 " + os.path.basename(_input["drop_file"]))
 
     _root, _id = ui_manager.apply_ui(
         (
@@ -1329,14 +1360,14 @@ def player_screen(_info, _input):
     _text_surf2 = global_asset["font"].render(_info["lyrics"][1], True, (255, 255, 255))
     if global_info["color"] == (255, 255, 255): _text_surf2.set_alpha(127)
 
-    _text_width = _text_surf1.size[0] + _text_surf2.size[0]
+    _text_width = _text_surf1.width + _text_surf2.width
 
     _text_position = ui_manager.get_abs_position((0.5, 0.489), True)
 
     _root.blits(
         (
             (_text_surf1, (_text_position[0] - _text_width / 2, _text_position[1] - global_asset["font"].get_height() / 2)),
-            (_text_surf2, (_text_position[0] - _text_width / 2 + _text_surf1.size[0], _text_position[1] - global_asset["font"].get_height() / 2))
+            (_text_surf2, (_text_position[0] - _text_width / 2 + _text_surf1.width, _text_position[1] - global_asset["font"].get_height() / 2))
         )
     )
 
@@ -1401,7 +1432,7 @@ def convertor_screen(_info, _input):
         if os.path.splitext(_input["drop_file"])[1] == ".mid":
             global_info["convertor"]["file"] = _input["drop_file"]
         else:
-            global_info["message"].append("不支持的文件格式 " + os.path.basename(_input["drop_file"]))
+            show_message("不支持的文件格式 " + os.path.basename(_input["drop_file"]))
 
     if global_info["convertor"]["edition"] == 0:
         _ver_text = "基岩版"
@@ -1494,13 +1525,13 @@ def convertor_screen(_info, _input):
                 add_page(overlay_page, [advanced_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0, 0]}])
             case 4:
                 if not global_info["convertor"]["file"]:
-                    global_info["message"].append("请选择文件")
+                    show_message("请选择文件")
                 elif global_info["convertor"]["edition"] == -1:
-                    global_info["message"].append("请选择游戏版本")
+                    show_message("请选择游戏版本")
                 elif global_info["convertor"]["output_format"] == -1:
-                    global_info["message"].append("请完成常用设置")
+                    show_message("请完成常用设置")
                 elif global_info["convertor"]["time_per_tick"] == -1:
-                    global_info["message"].append("请完成其他设置")
+                    show_message("请完成其他设置")
                 else:
                     start_task()
 
@@ -1543,7 +1574,7 @@ def software_setting_screen(_info, _input):
             case _i if _i.lower() in (".jpeg", ".jpg", ".png"):
                 threading.Thread(target=produce_background, args=[_input["drop_file"]], daemon=True).start()
             case _:
-                global_info["message"].append("不支持的文件 " + os.path.basename(_input["drop_file"]))
+                show_message("不支持的文件 " + os.path.basename(_input["drop_file"]))
 
     match global_info["setting"]["log_level"]:
         case 0:
@@ -1597,7 +1628,7 @@ def custom_setting_screen(_info, _input):
             case _i if _i.lower() in (".jpeg", ".jpg", ".png"):
                 threading.Thread(target=produce_background, args=[_input["drop_file"]], daemon=True).start()
             case _:
-                global_info["message"].append("不支持的文件 " + os.path.basename(_input["drop_file"]))
+                show_message("不支持的文件 " + os.path.basename(_input["drop_file"]))
 
     _root, _id = ui_manager.apply_ui(
         (
@@ -1660,7 +1691,7 @@ def version_list_screen(_info, _input):
             case _i if _i.lower() in (".zst", ".xz", ".gz", ".zip"):
                 threading.Thread(target=unpack, args=[_input["drop_file"]], daemon=True).start()
             case _:
-                global_info["message"].append("不支持的文件 " + os.path.basename(_input["drop_file"]))
+                show_message("不支持的文件 " + os.path.basename(_input["drop_file"]))
 
     if global_info["update_list"][1]:
         _ver_list = _info["edition_info"][1][_info["edition_info"][0][_info["tag_index"]]]
@@ -1707,7 +1738,12 @@ def version_list_screen(_info, _input):
         _root = ui_manager.get_blur_background()
         _text_surface = global_asset["font"].render("无法获取版本信息", True, (255, 255, 255))
         _text_position = ui_manager.get_abs_position((0.5, 0.5), True)
-        _root.blit(_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - global_asset["font"].get_height() / 2))
+        _root.blits(
+            (
+                (global_asset["message_mask"], ui_manager.get_abs_position((0, 0), True)),
+                (_text_surface, (_text_position[0] - _text_surface.get_size()[0] / 2, _text_position[1] - global_asset["font"].get_height() / 2))
+            )
+        )
 
     return _root
 
@@ -1750,15 +1786,9 @@ def download_screen(_info, _input):
     else:
         _text = ""
 
-    _root, _id = ui_manager.apply_ui(
-        (
-            (0.025, 0.044, 0.95, 0.089, (_info["title"], 0.035, 255), -1),
-            (0.025, 0.177, 0.95, 0.089, (_text, 0.035, 255), -1)
-        ),
-        pygame.mouse.get_pos()
-    )
+    _progress = {"text": _info["title"] + "\n" + _text, "progress": _info["state"]["buffer"].get_progress()}
 
-    return _root
+    return processing_screen(_progress, {})
 
 def adj_mapping_screen(_info, _input):
     if "mouse_right" in _input and not _input["mouse_right"]:
@@ -1900,7 +1930,7 @@ def setting_screen(_info, _input):
                         global_info["convertor"]["command_type"] = 1
                 elif global_info["convertor"]["output_format"] == 2:
                     global_info["convertor"]["command_type"] = 0
-                    global_info["message"].append("目标游戏存档需要安装MMS播放器行为包（关于页面下载）！")
+                    show_message("游戏存档需要安装 MMS播放器\n可前往关于页面下载该行为包")
             case 1:
                 if global_info["convertor"]["output_format"] != 2:
                     global_info["convertor"]["command_type"] += 1
@@ -1948,9 +1978,9 @@ def advanced_setting_screen(_info, _input):
                 global_info["convertor"]["extension"] = not global_info["convertor"]["extension"]
                 if global_info["convertor"]["extension"]:
                     if global_info["convertor"]["edition"] == 0:
-                        global_info["message"].append("基岩版无需开启，此功能是为Java版设计！")
+                        show_message("基岩版无需开启，此功能是为Java版设计")
                     else:
-                        global_info["message"].append("目标游戏存档需要安装MMS音域扩展资源包（关于页面下载）！")
+                        show_message("游戏存档需要安装 MMS音域扩展包\n可前往关于页面下载该资源包")
             case 6:
                 if global_info["convertor"]["command_type"] != 0 and not (global_info["convertor"]["edition"] == 1 and global_info["convertor"]["version"] == 0):
                     global_info["convertor"]["compression"] = not global_info["convertor"]["compression"]
@@ -2117,7 +2147,24 @@ def keyboard_screen(_info: dict, _input: dict[str, bool]) -> pygame.Surface:
     return _root
 
 def processing_screen(_info, _input):
-    return ui_manager.get_blur_background()
+    _root = ui_manager.get_blur_background()
+
+    if "mask" not in _info:
+        _info["alpha"] = _info.get("progress", 0.5) * 255
+        _info["mask"] = global_asset["message_mask"].copy()
+        _info["mask"].fill((0, 0, 0))
+
+    _info["mask"].set_alpha(round_int(_info["alpha"]))
+    _root.blit(_info["mask"], ui_manager.get_abs_position((0, 0), True))
+
+    _info["alpha"] += (_info.get("progress", 0.5) * 255 - _info["alpha"]) * global_info["animation_speed"]
+
+    if _text := _info.get("text", None):
+        _text_surf = global_asset["font"].render(_text, True, (255, 255, 255))
+        _text_position = ui_manager.get_abs_position((0.5, 0.5), True)
+        _root.blit(_text_surf, (round_int(_text_position[0] - _text_surf.width / 2), round_int((_text_position[1] - _text_surf.height / 2))))
+
+    return _root
 
 def asking_screen(_info, _input):
     _root, _id = ui_manager.apply_ui(
@@ -2148,7 +2195,7 @@ if base_path := getattr(sys, "_MEIPASS", None):
     else:
         os.chdir(base_path)
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, False], "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-goEg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "interpolation": 0, "ask_mapping": False, "remove_chord": True, "channels_num": 32, "max_cmd_length": 256, "animation_speed": 10, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "message_info": [0, 0, 0], "message_is_armed": False, "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-goEg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "interpolation": 0, "ask_mapping": False, "remove_chord": True, "channels_num": 32, "max_cmd_length": 256, "animation_speed": 10, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 
@@ -2220,6 +2267,10 @@ finally:
     with open("Asset/text/setting.json", "w") as io:
         io.write(json.dumps(global_info["setting"], indent=2))
 
+    if global_info["exit"] != 3:
+        pygame.quit()
+        logger.done()
+
     if global_info["exit"] == 2:
         subprocess.run(("Updater/updater.exe", os.path.abspath("")))
     elif global_info["exit"] == 3:
@@ -2227,6 +2278,4 @@ finally:
         pygame.display.flip()
         time.sleep(3)
 
-    pygame.quit()
-    logger.done()
-    os._exit(0)
+    os._exit(1 if global_info["exit"] == 3 else 0)

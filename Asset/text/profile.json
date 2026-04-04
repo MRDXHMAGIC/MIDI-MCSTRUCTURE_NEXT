@@ -105,24 +105,24 @@
         "/execute as @a at @s run playsound {SOUND} @s {POSITION} {VOLUME} {PITCH} {VOLUME}"
       ],
       "clock": [
-        "/{SELECTOR} at @s run playsound {SOUND} @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
+        "/execute {SELECTOR} at @s run playsound {SOUND} @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
         "/scoreboard players set @a[scores={mms={TIME}..}] mms -1",
         "/scoreboard players add @a[scores={mms=0..}] mms 1"
       ],
       "address": [
-        "/{SELECTOR} at @s run playsound {SOUND} @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
+        "/execute {SELECTOR} at @s run playsound {SOUND} @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
         "/scoreboard players set @a[scores={mms={TIME}..,mms_id={ADDRESS}}] mms -1",
         "/scoreboard players add @a[scores={mms=0..,mms_id={ADDRESS}}] mms 1"
       ],
       "lyrics": [
         "/titleraw @a actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}",
-        "/{SELECTOR} run titleraw @s actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}",
-        "/{SELECTOR} run titleraw @s actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}"
+        "/execute {SELECTOR} run titleraw @s actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}",
+        "/execute {SELECTOR} run titleraw @s actionbar {\"rawtext\":[{\"text\":\"-----------------------------------------------\\n§7{LAST}\\n§r§e{REAL_F}§r§f{REAL_S}\\n§r§7{NEXT}\\n§r-----------------------------------------------\"}]}"
       ]
     },
     "selector": {
-      "single": "execute as @a[scores={{EVAL:\"mms_id={ADDRESS},\" if enable_address else \"\"}mms={VALUE}}]",
-      "multiple": "execute as @a{EVAL:\"[scores={mms_id={ADDRESS}}]\" if enable_address else \"\"} unless entity @s[scores={{EVAL:\",\".join(tools.map_nodes(tools.join_nodes(nodes), \"mms=!{VALUE}\"))}}]"
+      "single": "as @a[scores={{EVAL:\"mms_id={ADDRESS},\" if enable_address else \"\"}mms={VALUE}}]",
+      "multiple": "as @a{EVAL:\"[scores={mms_id={ADDRESS}}]\" if enable_address else \"\"} unless entity @s[scores={{EVAL:\",\".join(tools.map_nodes(tools.join_nodes(nodes), \"mms=!{VALUE}\"))}}]"
     },
     "sound_extension": [
       [[0.0, 1000.0], "{SOUND}", 1.0]
@@ -242,19 +242,19 @@
         "/execute as @a at @s run playsound {SOUND} record @s {POSITION} {VOLUME} {PITCH} {VOLUME}"
       ],
       "clock": [
-        "/execute as {SELECTOR} at @s run playsound {SOUND} record @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
+        "/execute {SELECTOR} at @s run playsound {SOUND} record @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
         "/scoreboard players set @a[scores={mms={TIME}..}] mms -1",
         "/scoreboard players add @a[scores={mms=0..}] mms 1"
       ],
       "address": [
-        "/execute as {SELECTOR} {TTS} at @s run playsound {SOUND} record @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
+        "/execute {SELECTOR} {TTS} at @s run playsound {SOUND} record @s {POSITION} {VOLUME} {PITCH} {VOLUME}",
         "/scoreboard players set @a[scores={mms={TIME}..,mms_id={ADDRESS}}] mms -1",
         "/scoreboard players add @a[scores={mms=0..,mms_id={ADDRESS}}] mms 1"
       ],
       "lyrics": [
         "/title @a actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]",
-        "/execute as {SELECTOR} run title @s actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]",
-        "/execute as {SELECTOR} run title @s actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]"
+        "/execute {SELECTOR} run title @s actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]",
+        "/execute {SELECTOR} run title @s actionbar [{\"text\":\"{REAL_F}\",\"color\":\"yellow\"},{\"text\":\"{REAL_S}\",\"color\":\"white\"}]"
       ],
       "timer_target_selector": {
         "regular": "if score @s mms matches {VALUE}",
@@ -266,8 +266,8 @@
       }
     },
     "selector": {
-      "single": "@a[scores={{EVAL:\"mms_id={ADDRESS},\" if enable_address else \"\"}mms={VALUE}}]",
-      "multiple": "@a{EVAL:\"[scores={mms_id={ADDRESS}}]\" if enable_address else \"\"} {EVAL:\" \".join(tools.map_nodes(tools.generate_legacy_nodes(nodes), \"unless score @s mms matches {VALUE}\"))}"
+      "single": "as @a[scores={{EVAL:\"mms_id={ADDRESS},\" if enable_address else \"\"}mms={VALUE}}]",
+      "multiple": "as @a{EVAL:\"[scores={mms_id={ADDRESS}}]\" if enable_address else \"\"} {EVAL:\" \".join(tools.map_nodes(tools.generate_legacy_nodes(nodes), \"unless score @s mms matches {VALUE}\"))}"
     },
     "sound_extension": [
       [[0.03125, 0.125], "mms:{SOUND}_0x0625", 16.0],

@@ -44,11 +44,7 @@ def install(_indent: int = 3, _stack = ""):
             install(_indent + 1, os.path.join(_stack, _token))
 
 try:
-    time.sleep(1)
     os.chdir(get_path())
-
-    add_log("I", "Wipe Cache")
-    if os.path.exists("Cache"): rmtree("Cache")
 
     add_log("I", "Load Old Settings")
     with open(get_path("Asset/text/setting.json"), "r", encoding="utf-8") as io:
@@ -76,7 +72,19 @@ try:
         add_log("E", traceback.format_exc())
 
     add_log("I", "Install Update:")
-    install()
+    for _ in range(16):
+        try:
+            install()
+        except:
+            add_log("E", traceback.format_exc())
+            time.sleep(1)
+        else:
+            break
+    else:
+        raise RuntimeError("Can not install update files!")
+
+    add_log("I", "Wipe Cache")
+    if os.path.exists("Cache"): rmtree("Cache")
 
     add_log("I", "Clean Up Update Files")
     if os.path.exists("Update"): rmtree("Update")

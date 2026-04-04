@@ -73,13 +73,6 @@ def get_color(_surf) -> tuple[int]:
 
     return min(((sum((_a - _b + (min(_average_color) - min(_color))) ** 2 for _a, _b in zip(_color, _average_color)), _color) for _color in _color_list), key=lambda _i: _i[0])[1]
 
-def uuid(_n: int) -> str:
-    _uuid = ""
-    while _n:
-        _uuid += str(hex(random.randint(0, 15)))[2:]
-        _n -= 1
-    return _uuid
-
 def limit(_min: float, _real: float, _max: float) -> float:
     return max(_min, min(_max, _real))
 
