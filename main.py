@@ -1338,7 +1338,9 @@ def get_resource_size(_url: str, _info: dict) -> None:
     except:
         logger.error(traceback.format_exc())
 
-def enter_to_generator():
+def enter_to_generator(_remove: bool = True):
+    if _remove: remove_page(overlay_page)
+
     if where_ffmpeg() is None:
         if global_info["ffmpeg"]:
             _text = ["未在该电脑上找到", "FFmpeg", "，是否安装？\n软件包大小为", "--", "MB"]
@@ -1663,7 +1665,7 @@ def player_screen(_info, _input):
             case 0:
                 if _info["armed"]: threading.Thread(target=open_filedialog, args=(player_callback, [("MIDI Files", ".mid")], True, _info), daemon=True).start()
             case 1:
-                enter_to_generator()
+                enter_to_generator(False)
             case 2:
                 add_page(overlay_page, [player_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0], "info": _info}])
             case 3:
