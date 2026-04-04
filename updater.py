@@ -6,8 +6,8 @@ import traceback
 from shutil import rmtree, copyfile
 
 log = []
-def add_log(_hand: str, _content: str, _indent: int = 1) -> None:
-    log.extend(f"[{_hand}]{"  " * _indent}{line.strip()}" for line in _content.splitlines())
+def add_log(_header: str, _content: str, _indent: int = 1) -> None:
+    log.extend(f"[{_header}]{"  " * _indent}{line.strip()}" for line in _content.splitlines())
 
 
 def get_path(*_paths):
@@ -76,12 +76,15 @@ try:
         try:
             install()
         except:
-            add_log("E", traceback.format_exc())
+            add_log("D", traceback.format_exc())
             time.sleep(1)
         else:
             break
     else:
         raise RuntimeError("Can not install update files!")
+
+    add_log("I", "Wipe Default Profile")
+    if os.path.exists("Asset/text/default_profile.json"): os.remove("Asset/text/default_profile.json")
 
     add_log("I", "Wipe Cache")
     if os.path.exists("Cache"): rmtree("Cache")

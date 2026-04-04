@@ -84,6 +84,8 @@ options = {
 
 
 shutil.copytree("Asset", "dist/Asset")
+shutil.rmtree("dist/Asset/sounds")
+
 with open("dist/Asset/text/setting.json", "rb") as io:
     setting = json.loads(io.read())
 

@@ -1,8 +1,16 @@
 [
   {
+    "API": 9,
+    "download_url": "https://gitee.com/mrdxhmagic/midi-mcstructure_next/releases/download/V19260327-Release/ffmpeg-8.1-essentials_build.tar.zst"
+  },
+  {
+    "API": 8,
+    "download_url": "https://gitee.com/mrdxhmagic/mms-profile-editor/releases/download/V20260404-Release/ProfileEditor.tar.zst"
+  },
+  {
     "API": 7,
     "type": "sound_extension",
-    "url": "www.123865.com/s/se2RTd-goEg"
+    "url": "https://www.123865.com/s/se2RTd-sxEg"
   },
   {
     "API": 6,
