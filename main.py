@@ -387,6 +387,7 @@ def generate_music(_info: dict[str, int | float | str]) -> None:
                 )
             ).check_returncode()
     except:
+        show_message("转换失败，请将log.txt发送给开发者以修复问题")
         logger.error(traceback.format_exc())
     finally:
         _progress["text"] = "正在回收资源"
@@ -440,6 +441,7 @@ def make_track(_queue: queue.SimpleQueue[tuple[str, int, int]], _callback) -> No
                         _running = False
             except:
                 logger.error(traceback.format_exc())
+                _running = False
             finally:
                 _callback(True)
     finally:
@@ -2491,7 +2493,7 @@ if base_path := getattr(sys, "_MEIPASS", None):
     else:
         os.chdir(base_path)
 
-global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "subprocess_pool": [], "message_info": [0, 0, 0], "message_is_armed": False, "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-goEg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "ffmpeg": "", "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "interpolation": 0, "ask_mapping": False, "remove_chord": True, "channels_num": 32, "max_cmd_length": 256, "animation_speed": 10, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
+global_info = {"exit": 0, "watch_dog": 0, "color": (255, 255, 255), "message": [], "subprocess_pool": [], "message_info": [0, 0, 0], "message_is_armed": False, "links": {"player": "gitee.com/mrdxhmagic/mms-midi-player/releases", "sound_extension": "www.123865.com/s/se2RTd-sxEg", "mms": "gitee.com/mrdxhmagic/midi-mcstructure_next", "qq": "qm.qq.com/q/9oBhTyDN8k"}, "new_version": False, "update_list": [[], {}], "ffmpeg": "", "sounds_update": {"version": -1, "download_url": ""}, "mcpack_update": ["", ""], "editor_update": {"version": 0}, "downloader": [{"state": "waiting", "downloaded": 0, "total": 0}], "setting": {"id": 1, "fps": 60, "version": 0, "edition": "Unknown", "log_level": 5, "interpolation": 0, "ask_mapping": False, "remove_chord": True, "channels_num": 32, "max_cmd_length": 256, "animation_speed": 10, "compression_level": 0, "disable_update_check": False}, "profile": {}, "convertor": {"file": "", "edition": -1, "version": 1, "new_java_pack": False, "command_type": 0, "output_format": -1, "volume": 30, "structure": 0, "skip": True, "time_per_tick": -1, "max_time_error": 5, "enable_accurate_tick": False, "adjustment": True, "percussion": True, "panning": False, "lyrics": {"enable": False, "smooth": True, "joining": False}, "hold": False, "extension": False, "compression": False, "ask_mapping": True}}
 global_asset: dict[str, pygame.Surface | pygame.font.Font | list | dict] = {}
 overlay_page = []
 

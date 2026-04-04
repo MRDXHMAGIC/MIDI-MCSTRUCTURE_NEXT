@@ -1,8 +1,8 @@
 {
   "id": 1,
   "fps": 60,
-  "version": 20260404,
-  "edition": "Alpha",
+  "version": 20260405,
+  "edition": "Beta",
   "log_level": 5,
   "interpolation": 0,
   "ask_mapping": false,

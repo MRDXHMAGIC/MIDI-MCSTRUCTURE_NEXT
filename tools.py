@@ -14,7 +14,7 @@ def where_ffmpeg() -> str:
         pass
 
     if os.path.exists("FFmpeg/bin/ffmpeg.exe"):
-        return os.path.abspath("Ffmpeg/ffmpeg.exe")
+        return os.path.abspath("FFmpeg/bin/ffmpeg.exe")
     else:
         return None
 
