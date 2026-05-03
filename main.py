@@ -249,16 +249,17 @@ def translate_mapping_profile(_mapping: dict, _sound: dict) -> dict:
 
 # MIDI转换
 def collect_resource():
-    for i in reversed(global_info["subprocess_pool"]):
+    for i in global_info["subprocess_pool"]:
         try:
-            i.terminate()
+            i.kill()
+            i.wait(timeout=3)
         except:
             logger.warn(traceback.format_exc())
-        finally:
-            del global_info["subprocess_pool"][-1]
+
+    global_info["subprocess_pool"].clear()
 
 def generate_music(_info: dict[str, int | float | str]) -> None:
-    _progress = {"text": "加载中", "progress": 0, "doing": 0, "done": 0}
+    _progress = {"text": "加载中", "progress": 0, "doing": 0, "done": 0, "exception": None}
     add_page(overlay_page, [processing_screen, _progress])
 
     _queue = queue.SimpleQueue()
@@ -291,6 +292,13 @@ def generate_music(_info: dict[str, int | float | str]) -> None:
         if os.path.exists("Cache/mixer"): shutil.rmtree("Cache/mixer")
         os.makedirs("Cache/mixer")
 
+        def set_exception(_exception: Exception = None) -> None:
+            if _exception is None:
+                if _progress.get("exception") is not None:
+                    raise _progress["exception"]
+            else:
+                _progress["exception"] = _exception
+
         def change_progress(_done: bool | Exception) -> None:
             if isinstance(_done, Exception):
                 raise _done
@@ -304,7 +312,7 @@ def generate_music(_info: dict[str, int | float | str]) -> None:
             _progress["progress"] = _progress["done"] / len(_task)
 
         for _ in range(_info["thread_num"]):
-            threading.Thread(target=make_track, args=(_queue, change_progress), daemon=True).start()
+            threading.Thread(target=make_track, args=(_queue, change_progress, set_exception), daemon=True).start()
 
         _header = f"\"{where_ffmpeg()}\""
         _file_mapping = {}
@@ -322,7 +330,7 @@ def generate_music(_info: dict[str, int | float | str]) -> None:
         _filter_text = ""
         for _k in sorted(_result.keys()) + [None]:
             if _note_num >= _info["task_size"] or _k is None:
-                with open("Cache/mixer/filter_" + str(_track_num), "w") as _io:
+                with open("Cache/mixer/filter_" + str(_track_num), "w", encoding="utf-8") as _io:
                     _io.write(" ".join(
                             (
                                 _filter_text,
@@ -332,7 +340,7 @@ def generate_music(_info: dict[str, int | float | str]) -> None:
                         )
                     )
 
-                _task.append((_header, _track_num, _note_num))
+                _task.append((_header, _track_num))
                 _filter_text = ""
                 _track_num += 1
                 _note_num = 0
@@ -341,14 +349,16 @@ def generate_music(_info: dict[str, int | float | str]) -> None:
                 if _program := _file_mapping.get(_note.dump(False)["program"], None):
                     if _filter_text:
                         _filter_text += " "
-                    _filter_text += _note.format("[" + str(_program) + ":a] aresample=" + str(_info["sample"]) + ", asetrate=" + str(_info["sample"]) + "*{PITCH}, aresample=" + str(_info["sample"]) + ", volume={VOLUME}, adelay=" + str(_k) + ":all=1, asetpts=PTS-STARTPTS [A_" + str(_note_num) + "];")
+                    _filter_text += _note.format("[" + str(_program) + ":a] aresample=" + str(_info["sample"]) + ", asetrate=" + str(_info["sample"]) + "*{PITCH}, aresample=" + str(_info["sample"]) + ", volume={VOLUME}, adelay=" + str(_k * _setting["time_per_tick"]) + ":all=1, asetpts=PTS-STARTPTS [A_" + str(_note_num) + "];")
                     _note_num += 1
 
         for _i in _task: _queue.put(_i)
 
-        time.sleep(1)
-
-        while _progress["doing"]: time.sleep(0.1)
+        while _progress["exception"] is None and _progress["done"] != len(_task):
+            time.sleep(1)
+        else:
+            if _progress["exception"] is not None:
+                raise _progress["exception"]
 
         _cmd = f"\"{where_ffmpeg()}\""
         _track_num = 0
@@ -384,68 +394,58 @@ def generate_music(_info: dict[str, int | float | str]) -> None:
                         "-y",
                         f"\"{_save_path}\""
                     )
-                )
+                ),
+                shell=True
             ).check_returncode()
     except:
         show_message("转换失败，请将log.txt发送给开发者以修复问题")
         logger.error(traceback.format_exc())
     finally:
         _progress["text"] = "正在回收资源"
-        _queue.put(None)
+        _progress["exception"] = StopIteration
         collect_resource()
 
         _progress["text"] = "文件转换结束"
         remove_page(overlay_page)
 
-def make_track(_queue: queue.SimpleQueue[tuple[str, int, int]], _callback) -> None:
+def make_track(_queue: queue.SimpleQueue[tuple[str, int]], _callback_pg, _callback_err) -> None:
     try:
-        _running = True
-        while _running:
+        while True:
             _data = _queue.get()
+            _callback_pg(False)
 
-            if _data is None:
-                _running = False
-                continue
-
-            _header, _id, _note_num = _data
-
-            _callback(False)
-            try:
-                _cmd = " ".join(
-                    (
-                        _header,
-                        "-/filter_complex",
-                        f"\"{os.path.abspath("Cache/mixer/filter_" + str(_id))}\"",
-                        "-acodec pcm_s32le",
-                        f"\"{os.path.abspath("Cache/mixer/track_" + str(_id))}.wav\""
-                    )
+            _cmd = " ".join(
+                (
+                    _data[0],
+                    "-/filter_complex",
+                    f"\"{os.path.abspath("Cache/mixer/filter_" + str(_data[1]))}\"",
+                    "-acodec pcm_s32le",
+                    f"\"{os.path.abspath("Cache/mixer/track_" + str(_data[1]))}.wav\""
                 )
+            )
 
-                _executable = subprocess.Popen(_cmd)
-                global_info["subprocess_pool"].append(_executable)
+            _subprocess = subprocess.Popen(_cmd, shell=True)
+            global_info["subprocess_pool"].append(_subprocess)
 
-                while _executable.poll() is None:
-                    try:
-                        if _data := _queue.get_nowait():
-                            _queue.put(_data)
-                        else:
-                            _executable.terminate()
-                            _running = False
-                            break
+            while _subprocess.poll() is None:
+                try:
+                    _callback_err()
+                except Exception as _error:
+                    raise _error
 
-                        time.sleep(0.1)
-                    except queue.Empty:
-                        pass
-                else:
-                    if _executable.poll() != 0:
-                        _running = False
-            except:
-                logger.error(traceback.format_exc())
-                _running = False
-            finally:
-                _callback(True)
-    finally:
-        _queue.put(None)
+                time.sleep(0.5)
+            else:
+                if _subprocess.poll() != 0:
+                    raise RuntimeError(f"Subprocess exit with error code {_subprocess.poll()}")
+
+            _callback_pg(True)
+
+    except StopIteration:
+        pass
+    except Exception as _error:
+        logger.error(traceback.format_exc())
+        _callback_err(_error)
+        _callback_pg(True)
 
 def repack_note(_note: Note, _id = None) -> Note:
     _data = _note.dump()
@@ -487,13 +487,27 @@ def read_midi(_setting: dict, _profile: dict) -> dict:
     _midi_reader.override_mapping(_mapping)
 
     if _setting["enable_accurate_tick"]:
-        _setting["time_per_tick"] = min(
-            ((_n, _midi_reader.get_time_accuracy(_n / 10)) for _n in
-             range((_setting["time_per_tick"] - _setting["max_time_error"]) * 10,
-                   1 + (_setting["time_per_tick"] + _setting["max_time_error"]) * 10)),
-            key=lambda _i: _i[1]
-        )[0] / 10
-        logger.debug(f"The best speed is {_setting["time_per_tick"]} ms/tick")
+        _msg = ["已匹配到最佳速度 ", _setting["time_per_tick"], "ms/tick"]
+        _tempo = _setting["time_per_tick"]
+        _min_error = float("INF")
+
+        show_message(_msg)
+        for _i in range(5):
+            _best_tempo = _tempo
+
+            for _n in range(-10, 11):
+                _error = _midi_reader.get_time_accuracy(_tempo + _n / 10 ** _i)
+                if _min_error >= _error:
+                    _best_tempo = _tempo + _n / 10 ** _i
+                    _min_error = _error
+
+            _msg[1] = str(round_45(_tempo, 3))
+            _tempo = _best_tempo
+
+        if abs(_setting["time_per_tick"] - _tempo) > _setting["max_time_error"]:
+            _msg.append(f"\n但由于超过最大偏移 ±{_setting["max_time_error"]}ms，故使用原速度 {_setting["time_per_tick"]}ms/tick")
+        else:
+            _setting["time_per_tick"] = _tempo
 
     # 存放音符和歌词字幕合并后的最终结果
     _result: dict[int, set[Note | Lyrics]] = {}
@@ -543,7 +557,10 @@ def read_midi(_setting: dict, _profile: dict) -> dict:
                     with open(os.path.splitext(_setting["file"])[0] + ".lrc", "r", encoding=_charset) as _io:
                         _lyrics_buffer.clear()
                         for _k, _i in load_lrc(_io.readlines(), _setting["time_per_tick"]):
-                            _lyrics_buffer[_k] = _i
+                            if _k in _lyrics_buffer:
+                                _lyrics_buffer[_k] += " " + _i
+                            else:
+                                _lyrics_buffer[_k] = _i
                     break
                 except:
                     pass
@@ -780,8 +797,8 @@ def convertor(_setting: dict, _task_id = None):
                                                           defaultextension=".mcpack"):
                 if os.path.exists(_save_path): os.remove(_save_path)
                 shutil.copyfile("Cache/output/package.zip", _save_path)
-    except:
-        show_message("转换失败，请将log.txt发送给开发者以修复问题")
+    except Exception as _error:
+        show_message(("转换中发生了以下错误，请发送日志给开发者以修复问题\n", type(_error).__name__) + ((": ", _error) if str(_error) else ()))
         logger.error(traceback.format_exc())
     finally:
         _progress["text"] = "文件转换结束"
@@ -1033,7 +1050,7 @@ def render_page(_root: pygame.Surface, _overlay: list, _event: dict):
     _root.blits((_page, (0, 0)) for _page in reversed(_pages))
 
     if global_info["message"] and global_info["message_is_armed"]:
-        _text = "".join(global_info["message"][0])
+        _text = "".join(map(str, global_info["message"][0]))
         _text_surface = global_asset["font"].render(_text, True, global_info["color"])
         _text_surface.set_alpha(255 * global_info["message_info"][0])
 
@@ -1342,15 +1359,21 @@ def get_resource_size(_url: str, _info: dict) -> None:
 
 def enter_to_generator(_remove: bool = True):
     if _remove: remove_page(overlay_page)
+    threading.Thread(target=open_generator, daemon=True).start()
+
+def open_generator():
+    add_page(overlay_page, [processing_screen, {"text": "正在检查FFmpeg，请稍后"}])
 
     if where_ffmpeg() is None:
         if global_info["ffmpeg"]:
             _text = ["未在该电脑上找到", "FFmpeg", "，是否安装？\n软件包大小为", "--", "MB"]
             threading.Thread(target=get_resource_size, args=(global_info["ffmpeg"], _text), daemon=True).start()
+            remove_page(overlay_page)
             add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["下载", "取消"], "argument": ("FFmpeg", global_info["ffmpeg"], "FFmpeg", enter_to_generator), "callback": show_download, "content": _text}], 0, True)
         else:
             show_message("未在该电脑上找到FFmpeg，且MMS未连接到网络\n请尝试手动安装并将其添加至环境变量中")
     else:
+        remove_page(overlay_page)
         add_page(overlay_page, [generator_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0], "file": global_info["convertor"]["file"], "volume": global_info["convertor"]["volume"], "thread_num": 4, "task_size": 200, "sample": 44100}])
 
 # GUI页面管理函数
@@ -1381,7 +1404,6 @@ def get_version_list():
                     global_info["mcpack_update"][1] = _i["download_url"]
                 case 6:
                     global_info["sounds_update"] = _i
-                    logger.info(str(_i))
                 case 7:
                     global_info["links"][_i["type"]] = _i["url"]
                 case 8:
@@ -1454,7 +1476,7 @@ def unpack(_path: str, _ask: bool = False):
             shutil.unpack_archive(_path, "Update")
             global_info["exit"] = 2
         else:
-            add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["安装", "取消"], "argument": (_path, True), "callback": unpack, "content": "是否将以下文件作为软件安装包安装？\n" + os.path.basename(_path)}], 0, True)
+            add_page(overlay_page, [asking_screen, {"button_state": [0, 0], "button_text": ["安装", "取消"], "argument": (), "callback": threading.Thread(target=unpack, args=(_path, True)).start, "content": "是否将以下文件作为软件安装包安装？\n" + os.path.basename(_path)}], 0, True)
     except:
         logger.error(traceback.format_exc())
         show_message("无法解压软件包！")
@@ -1642,7 +1664,7 @@ def player_screen(_info, _input):
             (0.275, 0.444, 0.45, 0.089, (("暂停" if _info["play"] else "播放") if _info["armed"] else "处理中", 0.035, _info["button_state"][4]), 4),
             (0.75, 0.444, 0.15, 0.089, (get_time_text(round_int(_info["length"] * 0.05)), 0.035, 255), -1),
             (0.925, 0.444, 0.05, 0.089, ("▶", 0.035, _info["button_state"][5]), 5),
-            (0.025, 0.578, 0.95, 0.089, ("", 0.035, 255), -1)
+            (0.025, 0.578, 0.95, 0.222, ("", 0.035, 255), -1)
         ),
         pygame.mouse.get_pos()
     )
@@ -1653,7 +1675,7 @@ def player_screen(_info, _input):
 
     _text_width = _text_surf1.width + _text_surf2.width
 
-    _text_position = ui_manager.get_abs_position((0.5, 0.489), True)
+    _text_position = ui_manager.get_abs_position((0.5, 0.689), True)
 
     _root.blits(
         (
@@ -1668,6 +1690,7 @@ def player_screen(_info, _input):
                 if _info["armed"]: threading.Thread(target=open_filedialog, args=(player_callback, [("MIDI Files", ".mid")], True, _info), daemon=True).start()
             case 1:
                 enter_to_generator(False)
+                _info["play"] = False
             case 2:
                 add_page(overlay_page, [player_setting_screen, {"button_state": [0, 0, 0, 0, 0, 0], "info": _info}])
             case 3:
@@ -2324,7 +2347,7 @@ def speed_setting_screen(_info, _input):
             case 1: global_info["convertor"]["enable_accurate_tick"] = not global_info["convertor"]["enable_accurate_tick"]
             case 2:
                 global_info["convertor"]["max_time_error"] += 1
-                if global_info["convertor"]["max_time_error"] > min(global_info["convertor"]["time_per_tick"], 8):
+                if global_info["convertor"]["max_time_error"] > min(global_info["convertor"]["time_per_tick"], 10):
                     global_info["convertor"]["max_time_error"] = 1
 
     return _root

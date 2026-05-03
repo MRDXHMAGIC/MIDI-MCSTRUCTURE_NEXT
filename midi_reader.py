@@ -53,10 +53,8 @@ class MIDIReader:
                 # 加载MIDI文件，clip参数用于阻止出现不合法数值时报错
                 self.__midi_file = mido.MidiFile(_path, charset=_charset, clip=True)
                 break
-            except:
+            except UnicodeDecodeError:
                 pass
-        else:
-            raise IOError("Can't Load MIDI File!")
 
     def __scan_time_nodes(self):
         _tempo_info = TempoList(self.__midi_file.ticks_per_beat)
