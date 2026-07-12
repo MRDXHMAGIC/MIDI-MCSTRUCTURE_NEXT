@@ -84,6 +84,15 @@
       "trumpet": [
         ["trumpet", 0.7, 0, 0]
       ],
+      "trombone": [
+        ["trumpet", 0.7, 0, 0]
+      ],
+      "tuba": [
+        ["trumpet", 0.7, 0, 0]
+      ],
+      "french_horn": [
+        ["trumpet", 0.7, 0, 0]
+      ],
       "orchestra_hit": [
         ["bass", 0.4, 0, 0],
         ["flute", 0.3, 0, 0]
@@ -223,6 +232,15 @@
       ],
       "trumpet": [
         ["note.trumpet", 0.7, 0, 0]
+      ],
+      "french_horn": [
+        ["note.trumpet_exposed", 0.7, 0, 0]
+      ],
+      "trombone": [
+        ["note.trumpet_weathered", 0.7, 0, 0]
+      ],
+      "tuba": [
+        ["note.trumpet_oxidized", 0.7, 0, 0]
       ],
       "orchestra_hit": [
         ["note.bass", 0.4, 0, 0],
@@ -373,6 +391,15 @@
       "trumpet": [
         ["block.note_block.trumpet", 0.7, 0, 0]
       ],
+      "french_horn": [
+        ["block.note_block.trumpet_exposed", 0.7, 0, 0]
+      ],
+      "trombone": [
+        ["block.note_block.trumpet_weathered", 0.7, 0, 0]
+      ],
+      "tuba": [
+        ["block.note_block.trumpet_oxidized", 0.7, 0, 0]
+      ],
       "orchestra_hit": [
         ["block.note_block.bass", 0.4, 0, 0],
         ["block.note_block.flute", 0.3, 0, 0]
@@ -502,6 +529,18 @@
       ],
       "gun": [
         ["random.explode", 1.0, 0, 0]
+      ],
+      "trumpet": [
+        ["note.flute", 0.8, 0, 0]
+      ],
+      "french_horn": [
+        ["note.flute", 0.8, 0, 0]
+      ],
+      "trombone": [
+        ["note.flute", 0.8, 0, 0]
+      ],
+      "tuba": [
+        ["note.flute", 0.8, 0, 0]
       ]
     }
   },
@@ -604,6 +643,18 @@
       "orchestra_hit": [
         ["block.note.bass", 0.4, 0, 0],
         ["block.note.flute", 0.3, 0, 0]
+      ],
+      "trumpet": [
+        ["block.note.flute", 0.8, 0, 0]
+      ],
+      "french_horn": [
+        ["block.note.flute", 0.8, 0, 0]
+      ],
+      "trombone": [
+        ["block.note.flute", 0.8, 0, 0]
+      ],
+      "tuba": [
+        ["block.note.flute", 0.8, 0, 0]
       ]
     }
   }
