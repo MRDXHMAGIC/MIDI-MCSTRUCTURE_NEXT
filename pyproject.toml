@@ -1,21 +1,14 @@
 [project]
 name = "mms-next-project"
-version = "1.10.2"
+version = "1.10.3"
 description = "Add your description here"
 requires-python = ">=3.14"
 dependencies = [
-    "amulet-nbt==2.1.8",
-    "certifi==2026.4.22",
-    "charset-normalizer==3.4.7",
-    "idna==3.13",
     "mido",
-    "packaging==26.2",
-    "pygame-ce==2.5.7",
-    "pyinstaller==6.20.0",
-    "pyinstaller-hooks-contrib==2026.4",
-    "requests==2.33.1",
-    "setuptools==82.0.1",
-    "urllib3==2.6.3",
+    "requests>=2.33.1",
+    "pygame-ce>=2.5.7",
+    "amulet-nbt~=5.0.*",
+    "pyinstaller>=6.20.0",
 ]
 
 [[tool.uv.index]]
