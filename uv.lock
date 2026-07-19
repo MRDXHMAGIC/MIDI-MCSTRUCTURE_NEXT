@@ -113,37 +113,23 @@ dependencies = [
 
 [[package]]
 name = "mms-next-project"
-version = "1.10.2"
+version = "1.10.3"
 source = { virtual = "." }
 dependencies = [
     { name = "amulet-nbt" },
-    { name = "certifi" },
-    { name = "charset-normalizer" },
-    { name = "idna" },
     { name = "mido" },
-    { name = "packaging" },
     { name = "pygame-ce" },
     { name = "pyinstaller" },
-    { name = "pyinstaller-hooks-contrib" },
     { name = "requests" },
-    { name = "setuptools" },
-    { name = "urllib3" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "amulet-nbt", specifier = "==2.1.8" },
-    { name = "certifi", specifier = "==2026.4.22" },
-    { name = "charset-normalizer", specifier = "==3.4.7" },
-    { name = "idna", specifier = "==3.13" },
+    { name = "amulet-nbt", specifier = ">=2.1.8" },
     { name = "mido", git = "https://gitee.com/mrdxhmagic/mido-for-mms.git" },
-    { name = "packaging", specifier = "==26.2" },
-    { name = "pygame-ce", specifier = "==2.5.7" },
-    { name = "pyinstaller", specifier = "==6.20.0" },
-    { name = "pyinstaller-hooks-contrib", specifier = "==2026.4" },
-    { name = "requests", specifier = "==2.33.1" },
-    { name = "setuptools", specifier = "==82.0.1" },
-    { name = "urllib3", specifier = "==2.6.3" },
+    { name = "pygame-ce", specifier = ">=2.5.7" },
+    { name = "pyinstaller", specifier = ">=6.20.0" },
+    { name = "requests", specifier = ">=2.33.1" },
 ]
 
 [[package]]

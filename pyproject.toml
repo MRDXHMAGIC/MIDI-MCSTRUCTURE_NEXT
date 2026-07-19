@@ -7,7 +7,7 @@ dependencies = [
     "mido",
     "requests>=2.33.1",
     "pygame-ce>=2.5.7",
-    "amulet-nbt~=5.0.*",
+    "amulet-nbt>=2.1.8",
     "pyinstaller>=6.20.0",
 ]
 
